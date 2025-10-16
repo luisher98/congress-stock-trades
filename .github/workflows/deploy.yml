@@ -1,0 +1,145 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src/CongressStockTrades.Functions'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Publish Functions
+        run: dotnet publish ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} --configuration Release --output ./output
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: function-app
+          path: ./output
+
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    needs: build
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    outputs:
+      functionAppName: ${{ steps.deploy.outputs.functionAppName }}
+      resourceGroupName: ${{ steps.deploy.outputs.resourceGroupName }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy Bicep
+        id: deploy
+        uses: azure/arm-deploy@v2
+        with:
+          scope: subscription
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          region: eastus
+          template: ./infra/bicep/main.bicep
+          parameters: environment=${{ github.event.inputs.environment || 'dev' }} location=eastus
+          deploymentName: congress-trades-${{ github.run_number }}
+
+  deploy-function:
+    runs-on: ubuntu-latest
+    needs: [build, deploy-infrastructure]
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: function-app
+          path: ./output
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ needs.deploy-infrastructure.outputs.functionAppName }}
+          package: ./output
+          scm-do-build-during-deployment: false
+          enable-oryx-build: false
+
+  verify-deployment:
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, deploy-function]
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Wait for Function App to be ready
+        run: sleep 30
+
+      - name: Health Check
+        run: |
+          FUNCTION_APP="${{ needs.deploy-infrastructure.outputs.functionAppName }}"
+          HEALTH_URL="https://${FUNCTION_APP}.azurewebsites.net/api/health"
+
+          echo "Checking health endpoint: $HEALTH_URL"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_URL)
+
+          if [ $HTTP_STATUS -eq 200 ]; then
+            echo "✅ Health check passed (HTTP $HTTP_STATUS)"
+          else
+            echo "❌ Health check failed (HTTP $HTTP_STATUS)"
+            exit 1
+          fi
+
+      - name: Deployment Summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Deployment completed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Function App:** ${{ needs.deploy-infrastructure.outputs.functionAppName }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Resource Group:** ${{ needs.deploy-infrastructure.outputs.resourceGroupName }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Endpoints:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Health: https://${{ needs.deploy-infrastructure.outputs.functionAppName }}.azurewebsites.net/api/health" >> $GITHUB_STEP_SUMMARY
+          echo "- Latest: https://${{ needs.deploy-infrastructure.outputs.functionAppName }}.azurewebsites.net/api/latest" >> $GITHUB_STEP_SUMMARY
+          echo "- SignalR: https://${{ needs.deploy-infrastructure.outputs.functionAppName }}.azurewebsites.net/api/negotiate" >> $GITHUB_STEP_SUMMARY
