@@ -6,12 +6,21 @@ using System.Text.RegularExpressions;
 
 namespace CongressStockTrades.Infrastructure.Services;
 
+/// <summary>
+/// Implementation of IFilingFetcher that scrapes the House disclosure website for PTR filing metadata.
+/// Uses HTTP POST requests and HtmlAgilityPack to parse the HTML response tables.
+/// </summary>
 public class FilingFetcher : IFilingFetcher
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<FilingFetcher> _logger;
     private const string BaseUrl = "https://disclosures-clerk.house.gov";
 
+    /// <summary>
+    /// Initializes a new instance of the FilingFetcher class.
+    /// </summary>
+    /// <param name="httpClient">HTTP client for making requests to House.gov</param>
+    /// <param name="logger">Logger for diagnostic output</param>
     public FilingFetcher(HttpClient httpClient, ILogger<FilingFetcher> logger)
     {
         _httpClient = httpClient;
@@ -41,6 +50,13 @@ public class FilingFetcher : IFilingFetcher
         return ParseHtml(html, year);
     }
 
+    /// <summary>
+    /// Parses HTML response to extract PTR filing metadata from table rows.
+    /// Filters for PTR-type filings only and extracts filing ID from PDF URLs using regex.
+    /// </summary>
+    /// <param name="html">Raw HTML response from House.gov</param>
+    /// <param name="year">Year for context (not used in parsing but kept for potential filtering)</param>
+    /// <returns>List of parsed Filing objects sorted by ID descending</returns>
     private List<Filing> ParseHtml(string html, int year)
     {
         var doc = new HtmlDocument();
