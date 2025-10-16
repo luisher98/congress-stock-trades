@@ -133,3 +133,25 @@ typings/
 
 # Lerna
 lerna-debug.log
+
+# .NET / Azure Functions
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+*.dll
+*.exe
+*.pdb
+*.cache
+local.settings.json
+
+# Azure
+.azure/
+.azd/
+
+# Secrets
+*.pfx
+*.key
+secrets.json
