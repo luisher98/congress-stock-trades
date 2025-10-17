@@ -10,6 +10,10 @@ using Microsoft.Extensions.Hosting;
 
 var host = Host.CreateDefaultBuilder(args)
     .ConfigureFunctionsWebApplication()
+    .ConfigureAppConfiguration((context, config) =>
+    {
+        config.AddEnvironmentVariables();
+    })
     .ConfigureServices((context, services) =>
     {
         // Application Insights
