@@ -3,21 +3,19 @@ using Azure;
 using CongressStockTrades.Core.Services;
 using CongressStockTrades.Infrastructure.Repositories;
 using CongressStockTrades.Infrastructure.Services;
+using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-var host = Host.CreateDefaultBuilder(args)
+var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
-    .ConfigureAppConfiguration((context, config) =>
-    {
-        config.AddEnvironmentVariables();
-    })
     .ConfigureServices((context, services) =>
     {
         // Application Insights
         services.AddApplicationInsightsTelemetryWorkerService();
+        services.ConfigureFunctionsApplicationInsights();
 
         var configuration = context.Configuration;
 
