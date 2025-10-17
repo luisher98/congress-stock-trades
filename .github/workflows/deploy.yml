@@ -42,10 +42,7 @@ jobs:
         run: dotnet test --configuration Release --no-build --verbosity normal
 
       - name: Publish Functions
-        run: |
-          dotnet clean ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          dotnet build ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} --configuration Release
-          dotnet publish ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} --configuration Release --output ./output --no-build
+        run: dotnet publish ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} --configuration Release --output ./output
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
