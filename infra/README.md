@@ -46,24 +46,26 @@ This directory contains Infrastructure as Code (IaC) templates for deploying the
 
 ## GitHub Actions Secrets
 
-Configure these secrets in your GitHub repository:
+Configure this secret in your GitHub repository:
 
-### Required Secrets
+### Required Secret
 
-1. **AZURE_CREDENTIALS**
-   ```bash
-   az ad sp create-for-rbac \
-     --name "github-actions-congress-trades" \
-     --role contributor \
-     --scopes /subscriptions/{subscription-id} \
-     --sdk-auth
-   ```
-   Copy the entire JSON output to this secret.
+**AZURE_CREDENTIALS** (contains subscription ID, no need for separate secret)
 
-2. **AZURE_SUBSCRIPTION_ID**
-   ```bash
-   az account show --query id -o tsv
-   ```
+```bash
+az ad sp create-for-rbac \
+  --name "github-actions-congress-trades" \
+  --role contributor \
+  --scopes /subscriptions/{subscription-id} \
+  --sdk-auth
+```
+
+Copy the entire JSON output to this secret. The JSON includes:
+
+- `clientId` - Service principal ID
+- `clientSecret` - Authentication secret
+- `subscriptionId` - Your Azure subscription ID (extracted automatically)
+- `tenantId` - Your Azure AD tenant ID
 
 ## Deployment via GitHub Actions
 
