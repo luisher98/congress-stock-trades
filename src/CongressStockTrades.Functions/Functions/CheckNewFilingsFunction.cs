@@ -36,6 +36,7 @@ public class CheckNewFilingsFunction
         _logger = logger;
 
         var connectionString = configuration["AzureWebJobsStorage"]
+            ?? Environment.GetEnvironmentVariable("AzureWebJobsStorage")
             ?? throw new InvalidOperationException("AzureWebJobsStorage not configured");
         _queueClient = new QueueClient(connectionString, "filings-to-process");
     }

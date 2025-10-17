@@ -27,8 +27,10 @@ var host = new HostBuilder()
         {
             var config = sp.GetRequiredService<IConfiguration>();
             var endpoint = config["DocumentIntelligence__Endpoint"]
+                ?? Environment.GetEnvironmentVariable("DocumentIntelligence__Endpoint")
                 ?? throw new InvalidOperationException("DocumentIntelligence__Endpoint not configured");
             var key = config["DocumentIntelligence__Key"]
+                ?? Environment.GetEnvironmentVariable("DocumentIntelligence__Key")
                 ?? throw new InvalidOperationException("DocumentIntelligence__Key not configured");
 
             return new DocumentAnalysisClient(new Uri(endpoint), new AzureKeyCredential(key));
@@ -42,6 +44,7 @@ var host = new HostBuilder()
         {
             var config = sp.GetRequiredService<IConfiguration>();
             var connectionString = config["SignalR__ConnectionString"]
+                ?? Environment.GetEnvironmentVariable("SignalR__ConnectionString")
                 ?? throw new InvalidOperationException("SignalR__ConnectionString not configured");
 
             var serviceManager = new ServiceManagerBuilder()
