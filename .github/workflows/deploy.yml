@@ -108,8 +108,8 @@ jobs:
         with:
           app-name: ${{ needs.deploy-infrastructure.outputs.functionAppName }}
           package: ./output
-          scm-do-build-during-deployment: false
-          enable-oryx-build: false
+          scm-do-build-during-deployment: true
+          enable-oryx-build: true
 
   verify-deployment:
     runs-on: ubuntu-latest
