@@ -18,10 +18,14 @@ public class TransactionRepository : ITransactionRepository
         ILogger<TransactionRepository> logger)
     {
         var endpoint = configuration["CosmosDb__Endpoint"]
+            ?? Environment.GetEnvironmentVariable("CosmosDb__Endpoint")
             ?? throw new InvalidOperationException("CosmosDb__Endpoint not configured");
         var key = configuration["CosmosDb__Key"]
+            ?? Environment.GetEnvironmentVariable("CosmosDb__Key")
             ?? throw new InvalidOperationException("CosmosDb__Key not configured");
-        var databaseName = configuration["CosmosDb__DatabaseName"] ?? "CongressTrades";
+        var databaseName = configuration["CosmosDb__DatabaseName"]
+            ?? Environment.GetEnvironmentVariable("CosmosDb__DatabaseName")
+            ?? "CongressTrades";
 
         _cosmosClient = new CosmosClient(endpoint, key);
         _logger = logger;
