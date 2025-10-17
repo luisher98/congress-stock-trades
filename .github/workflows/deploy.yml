@@ -55,8 +55,8 @@ jobs:
     needs: build
     environment: ${{ github.event.inputs.environment || 'dev' }}
     outputs:
-      functionAppName: ${{ steps.deploy.outputs.functionAppName }}
-      resourceGroupName: ${{ steps.deploy.outputs.resourceGroupName }}
+      functionAppName: ${{ steps.set-outputs.outputs.functionAppName }}
+      resourceGroupName: ${{ steps.set-outputs.outputs.resourceGroupName }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -77,6 +77,15 @@ jobs:
           parameters: environment=${{ github.event.inputs.environment || 'dev' }} location=centralus
           deploymentName: congress-trades-${{ github.run_number }}
           failOnStdErr: false
+
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          DEPLOYMENT_NAME="congress-trades-${{ github.run_number }}"
+          FUNCTION_APP_NAME=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.functionAppName.value -o tsv)
+          RESOURCE_GROUP_NAME=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.resourceGroupName.value -o tsv)
+          echo "functionAppName=$FUNCTION_APP_NAME" >> $GITHUB_OUTPUT
+          echo "resourceGroupName=$RESOURCE_GROUP_NAME" >> $GITHUB_OUTPUT
 
   deploy-function:
     runs-on: ubuntu-latest
