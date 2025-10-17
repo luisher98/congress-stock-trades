@@ -7,7 +7,7 @@ targetScope = 'subscription'
 param resourceGroupName string = 'congress-stock-trades-rg'
 
 @description('Azure region for resources')
-param location string = 'eastus'
+param location string = 'centralus'
 
 @description('Environment name (dev, staging, prod)')
 @allowed([

@@ -72,9 +72,9 @@ jobs:
         with:
           scope: subscription
           subscriptionId: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
-          region: eastus
+          region: centralus
           template: ./infra/bicep/main.bicep
-          parameters: environment=${{ github.event.inputs.environment || 'dev' }} location=eastus
+          parameters: environment=${{ github.event.inputs.environment || 'dev' }} location=centralus
           deploymentName: congress-trades-${{ github.run_number }}
           failOnStdErr: false
 
