@@ -17,9 +17,6 @@ param location string = 'eastus'
 ])
 param environment string = 'dev'
 
-@description('Application name prefix')
-param appName string = 'congress-trades'
-
 // Create resource group
 resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: resourceGroupName
@@ -38,7 +35,6 @@ module resources 'resources.bicep' = {
   params: {
     location: location
     environment: environment
-    appName: appName
   }
 }
 

@@ -5,17 +5,15 @@ param location string
 @description('Environment name')
 param environment string
 
-@description('Application name prefix')
-param appName string
-
 var uniqueSuffix = uniqueString(resourceGroup().id)
-var functionAppName = '${appName}-func-${environment}-${uniqueSuffix}'
-var storageAccountName = toLower('${appName}${environment}${take(uniqueSuffix, 6)}')
-var cosmosDbAccountName = '${appName}-cosmos-${environment}-${uniqueSuffix}'
-var signalRName = '${appName}-signalr-${environment}-${uniqueSuffix}'
-var docIntelName = '${appName}-docintel-${environment}-${uniqueSuffix}'
-var appInsightsName = '${appName}-ai-${environment}-${uniqueSuffix}'
-var logWorkspaceName = '${appName}-logs-${environment}-${uniqueSuffix}'
+var functionAppName = 'func-cst-${environment}-${take(uniqueSuffix, 8)}'
+// Storage account name must be 3-24 chars, lowercase and numbers only
+var storageAccountName = toLower('stcst${environment}${take(uniqueSuffix, 10)}')
+var cosmosDbAccountName = 'cosmos-cst-${environment}-${take(uniqueSuffix, 8)}'
+var signalRName = 'signalr-cst-${environment}-${take(uniqueSuffix, 8)}'
+var docIntelName = 'docintel-cst-${environment}-${take(uniqueSuffix, 6)}'
+var appInsightsName = 'ai-cst-${environment}-${take(uniqueSuffix, 8)}'
+var logWorkspaceName = 'logs-cst-${environment}-${take(uniqueSuffix, 8)}'
 
 // Storage Account for Azure Functions
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
@@ -202,13 +200,15 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 
 // App Service Plan (Consumption Y1)
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
-  name: '${appName}-plan-${environment}'
+  name: 'plan-cst-${environment}'
   location: location
   sku: {
     name: 'Y1'
     tier: 'Dynamic'
   }
-  properties: {}
+  properties: {
+    reserved: false
+  }
   tags: {
     Environment: environment
   }
