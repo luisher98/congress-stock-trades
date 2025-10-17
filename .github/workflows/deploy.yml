@@ -76,6 +76,7 @@ jobs:
           template: ./infra/bicep/main.bicep
           parameters: environment=${{ github.event.inputs.environment || 'dev' }} location=eastus
           deploymentName: congress-trades-${{ github.run_number }}
+          failOnStdErr: false
 
   deploy-function:
     runs-on: ubuntu-latest
