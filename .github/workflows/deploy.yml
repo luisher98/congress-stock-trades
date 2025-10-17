@@ -114,6 +114,7 @@ jobs:
   verify-deployment:
     runs-on: ubuntu-latest
     needs: [deploy-infrastructure, deploy-function]
+    environment: ${{ github.event.inputs.environment || 'dev' }}
     steps:
       - name: Azure Login
         uses: azure/login@v2
