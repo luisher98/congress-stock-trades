@@ -19,6 +19,12 @@ var host = new HostBuilder()
 
         var configuration = context.Configuration;
 
+        // Log configuration for debugging
+        Console.WriteLine($"[STARTUP] DocumentIntelligence__ModelId: {configuration["DocumentIntelligence__ModelId"] ?? "NULL"}");
+        Console.WriteLine($"[STARTUP] DocumentIntelligence__Endpoint: {(configuration["DocumentIntelligence__Endpoint"] != null ? "SET" : "NULL")}");
+        Console.WriteLine($"[STARTUP] SignalR__ConnectionString: {(configuration["SignalR__ConnectionString"] != null ? "SET" : "NULL")}");
+        Console.WriteLine($"[STARTUP] CosmosDb__Endpoint: {(configuration["CosmosDb__Endpoint"] != null ? "SET" : "NULL")}");
+
         // Register HttpClient for FilingFetcher
         services.AddHttpClient<IFilingFetcher, FilingFetcher>();
 
