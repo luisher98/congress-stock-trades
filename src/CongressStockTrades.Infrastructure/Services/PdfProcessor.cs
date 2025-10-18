@@ -114,13 +114,15 @@ public class PdfProcessor : IPdfProcessor
         }
 
         // If transactions is a list/array field
-        if (transactionsField.ValueType == DocumentFieldType.List)
+        if (transactionsField.FieldType == DocumentFieldType.List)
         {
-            foreach (var item in transactionsField.ValueList)
+            var transactionsList = transactionsField.AsList();
+
+            foreach (var item in transactionsList)
             {
-                if (item.ValueType == DocumentFieldType.Dictionary)
+                if (item.FieldType == DocumentFieldType.Dictionary)
                 {
-                    var fields = item.ValueDictionary;
+                    var fields = item.AsDictionary();
 
                     transactions.Add(new Transaction
                     {
