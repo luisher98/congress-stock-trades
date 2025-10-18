@@ -45,7 +45,7 @@ var host = new HostBuilder()
         // Register HttpClient for PdfProcessor
         services.AddHttpClient();
 
-        // Register SignalR Service
+        // Register SignalR Service - use lazy initialization to avoid blocking startup
         services.AddSingleton<ServiceHubContext>(sp =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
@@ -60,7 +60,25 @@ var host = new HostBuilder()
                 })
                 .BuildServiceManager();
 
-            return serviceManager.CreateHubContextAsync("transactions", default).GetAwaiter().GetResult();
+            try
+            {
+                // Use a timeout to prevent indefinite blocking
+                var task = serviceManager.CreateHubContextAsync("transactions", default);
+                if (task.Wait(TimeSpan.FromSeconds(30)))
+                {
+                    return task.Result;
+                }
+                else
+                {
+                    throw new TimeoutException("SignalR hub context creation timed out after 30 seconds");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the error but don't crash the entire app
+                Console.WriteLine($"[ERROR] Failed to create SignalR hub context: {ex.Message}");
+                throw;
+            }
         });
 
         // Register services

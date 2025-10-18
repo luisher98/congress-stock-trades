@@ -29,11 +29,15 @@ public class ProcessFilingFunction
         INotificationService notificationService,
         ILogger<ProcessFilingFunction> logger)
     {
+        _logger = logger;
+        _logger.LogInformation("ProcessFilingFunction constructor starting...");
+
         _pdfProcessor = pdfProcessor;
         _validator = validator;
         _repository = repository;
         _notificationService = notificationService;
-        _logger = logger;
+
+        _logger.LogInformation("ProcessFilingFunction constructor completed");
     }
 
     /// <summary>

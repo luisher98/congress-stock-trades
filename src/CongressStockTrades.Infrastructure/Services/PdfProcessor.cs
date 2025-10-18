@@ -23,9 +23,14 @@ public class PdfProcessor : IPdfProcessor
         _httpClient = httpClient;
         _docIntelClient = docIntelClient;
         _logger = logger;
+
+        _logger.LogInformation("PdfProcessor initializing...");
+
         _modelId = configuration["DocumentIntelligence__ModelId"]
             ?? Environment.GetEnvironmentVariable("DocumentIntelligence__ModelId")
-            ?? throw new InvalidOperationException("DocumentIntelligence__ModelId not configured");
+            ?? "ptr-extractor-v1"; // Default fallback
+
+        _logger.LogInformation("PdfProcessor initialized with ModelId: {ModelId}", _modelId);
     }
 
     public async Task<TransactionDocument> ProcessPdfAsync(
