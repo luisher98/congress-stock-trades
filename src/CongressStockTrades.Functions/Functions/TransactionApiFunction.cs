@@ -101,7 +101,9 @@ public class TransactionApiFunction
                 {
                     cosmosDb = "healthy",
                     hasData = transaction != null
-                }
+                },
+                latestProcessedAt = transaction?.ProcessedAt,
+                lastChecked = DateTime.UtcNow
             });
             return response;
         }
