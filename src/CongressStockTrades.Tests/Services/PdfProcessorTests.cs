@@ -3,6 +3,7 @@ using Azure.AI.FormRecognizer.DocumentAnalysis;
 using Azure.Core;
 using CongressStockTrades.Infrastructure.Services;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -12,13 +13,19 @@ public class PdfProcessorTests
 {
     private readonly Mock<HttpClient> _httpClientMock;
     private readonly Mock<DocumentAnalysisClient> _docIntelClientMock;
+    private readonly Mock<IConfiguration> _configurationMock;
     private readonly Mock<ILogger<PdfProcessor>> _loggerMock;
 
     public PdfProcessorTests()
     {
         _httpClientMock = new Mock<HttpClient>();
         _docIntelClientMock = new Mock<DocumentAnalysisClient>();
+        _configurationMock = new Mock<IConfiguration>();
         _loggerMock = new Mock<ILogger<PdfProcessor>>();
+
+        // Setup configuration to return a model ID
+        _configurationMock.Setup(c => c["DocumentIntelligence__ModelId"])
+            .Returns("ptr-extractor-v1");
     }
 
     [Fact]
@@ -28,6 +35,7 @@ public class PdfProcessorTests
         var action = () => new PdfProcessor(
             new HttpClient(),
             Mock.Of<DocumentAnalysisClient>(),
+            _configurationMock.Object,
             _loggerMock.Object
         );
 
@@ -42,6 +50,7 @@ public class PdfProcessorTests
         var pdfProcessor = new PdfProcessor(
             new HttpClient(),
             Mock.Of<DocumentAnalysisClient>(),
+            _configurationMock.Object,
             _loggerMock.Object
         );
 
@@ -64,6 +73,7 @@ public class PdfProcessorTests
         var pdfProcessor = new PdfProcessor(
             new HttpClient(),
             Mock.Of<DocumentAnalysisClient>(),
+            _configurationMock.Object,
             _loggerMock.Object
         );
 
