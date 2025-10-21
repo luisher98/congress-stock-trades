@@ -1,4 +1,5 @@
 using Azure.Storage.Queues;
+using Azure.Storage.Queues.Models;
 using CongressStockTrades.Core.Models;
 using CongressStockTrades.Core.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -16,7 +17,7 @@ public class CheckNewFilingsFunction
 {
     private readonly IFilingFetcher _filingFetcher;
     private readonly ITransactionRepository _repository;
-    private readonly INotificationService _notificationService;
+    // private readonly INotificationService _notificationService;
     private readonly QueueClient _queueClient;
     private readonly ILogger<CheckNewFilingsFunction> _logger;
 
@@ -26,26 +27,33 @@ public class CheckNewFilingsFunction
     public CheckNewFilingsFunction(
         IFilingFetcher filingFetcher,
         ITransactionRepository repository,
-        INotificationService notificationService,
+        // INotificationService notificationService,
         IConfiguration configuration,
         ILogger<CheckNewFilingsFunction> logger)
     {
         _filingFetcher = filingFetcher;
         _repository = repository;
-        _notificationService = notificationService;
+        // _notificationService = notificationService;
         _logger = logger;
 
         var connectionString = configuration["AzureWebJobsStorage"]
             ?? Environment.GetEnvironmentVariable("AzureWebJobsStorage")
             ?? throw new InvalidOperationException("AzureWebJobsStorage not configured");
-        _queueClient = new QueueClient(connectionString, "filings-to-process");
+
+        // IMPORTANT: Use Base64 encoding to match Azure Functions QueueTrigger expectations
+        // Without this, messages fail silently with "MaxDequeueCount" errors
+        _queueClient = new QueueClient(connectionString, "filings-to-process",
+            new QueueClientOptions
+            {
+                MessageEncoding = QueueMessageEncoding.Base64
+            });
     }
 
     /// <summary>
     /// Timer trigger that runs every 5 minutes to check for new filings.
     /// </summary>
     [Function("CheckNewFilings")]
-    public async Task Run([TimerTrigger("0 */5 * * * *")] TimerInfo timerInfo)
+    public async Task Run([TimerTrigger("*/30 * * * * *")] TimerInfo timerInfo)
     {
         _logger.LogInformation("Timer trigger fired at: {Time}", DateTime.UtcNow);
 
@@ -67,7 +75,7 @@ public class CheckNewFilingsFunction
             if (isProcessed)
             {
                 _logger.LogInformation("Filing {FilingId} already processed, skipping", latestFiling.Id);
-                await _notificationService.NotifyCheckingStatusAsync("No new filings found.");
+                // await _notificationService.NotifyCheckingStatusAsync("No new filings found.");
                 return;
             }
 

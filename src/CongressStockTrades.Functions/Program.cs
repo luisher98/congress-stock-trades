@@ -17,35 +17,28 @@ var host = new HostBuilder()
         services.AddApplicationInsightsTelemetryWorkerService();
         services.ConfigureFunctionsApplicationInsights();
 
-        var configuration = context.Configuration;
-
-        // Log configuration for debugging
-        Console.WriteLine($"[STARTUP] DocumentIntelligence__ModelId: {configuration["DocumentIntelligence__ModelId"] ?? "NULL"}");
-        Console.WriteLine($"[STARTUP] DocumentIntelligence__Endpoint: {(configuration["DocumentIntelligence__Endpoint"] != null ? "SET" : "NULL")}");
-        Console.WriteLine($"[STARTUP] SignalR__ConnectionString: {(configuration["SignalR__ConnectionString"] != null ? "SET" : "NULL")}");
-        Console.WriteLine($"[STARTUP] CosmosDb__Endpoint: {(configuration["CosmosDb__Endpoint"] != null ? "SET" : "NULL")}");
-
         // Register HttpClient for FilingFetcher
         services.AddHttpClient<IFilingFetcher, FilingFetcher>();
 
         // Register Document Intelligence client
         services.AddSingleton<DocumentAnalysisClient>(sp =>
         {
-            var config = sp.GetRequiredService<IConfiguration>();
-            var endpoint = config["DocumentIntelligence__Endpoint"]
-                ?? Environment.GetEnvironmentVariable("DocumentIntelligence__Endpoint")
+            // Use Environment variables directly (local.settings.json values are loaded as env vars)
+            var endpoint = Environment.GetEnvironmentVariable("DocumentIntelligence__Endpoint")
                 ?? throw new InvalidOperationException("DocumentIntelligence__Endpoint not configured");
-            var key = config["DocumentIntelligence__Key"]
-                ?? Environment.GetEnvironmentVariable("DocumentIntelligence__Key")
+            var key = Environment.GetEnvironmentVariable("DocumentIntelligence__Key")
                 ?? throw new InvalidOperationException("DocumentIntelligence__Key not configured");
 
+            Console.WriteLine($"[DI] Creating DocumentAnalysisClient with endpoint: {endpoint.Substring(0, 30)}...");
             return new DocumentAnalysisClient(new Uri(endpoint), new AzureKeyCredential(key));
         });
 
         // Register HttpClient for PdfProcessor
         services.AddHttpClient();
 
-        // Register SignalR Service - use lazy initialization to avoid blocking startup
+        // TEMPORARILY DISABLED: SignalR Service - causing DI to hang
+        // TODO: Re-enable after fixing the hub context initialization issue
+        /*
         services.AddSingleton<ServiceHubContext>(sp =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
@@ -62,7 +55,6 @@ var host = new HostBuilder()
 
             try
             {
-                // Use a timeout to prevent indefinite blocking
                 var task = serviceManager.CreateHubContextAsync("transactions", default);
                 if (task.Wait(TimeSpan.FromSeconds(30)))
                 {
@@ -75,17 +67,18 @@ var host = new HostBuilder()
             }
             catch (Exception ex)
             {
-                // Log the error but don't crash the entire app
                 Console.WriteLine($"[ERROR] Failed to create SignalR hub context: {ex.Message}");
                 throw;
             }
         });
+        */
 
         // Register services
         services.AddSingleton<IPdfProcessor, PdfProcessor>();
         services.AddSingleton<IDataValidator, DataValidator>();
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
-        services.AddSingleton<INotificationService, SignalRNotificationService>();
+        // TEMPORARILY DISABLED: NotificationService (depends on SignalR)
+        // services.AddSingleton<INotificationService, SignalRNotificationService>();
 
         // Register logging
         services.AddLogging();

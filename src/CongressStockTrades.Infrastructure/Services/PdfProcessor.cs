@@ -20,16 +20,18 @@ public class PdfProcessor : IPdfProcessor
         IConfiguration configuration,
         ILogger<PdfProcessor> logger)
     {
+        Console.WriteLine("[PdfProcessor] Constructor called");
         _httpClient = httpClient;
         _docIntelClient = docIntelClient;
         _logger = logger;
 
         _logger.LogInformation("PdfProcessor initializing...");
 
-        _modelId = configuration["DocumentIntelligence__ModelId"]
-            ?? Environment.GetEnvironmentVariable("DocumentIntelligence__ModelId")
+        _modelId = Environment.GetEnvironmentVariable("DocumentIntelligence__ModelId")
+            ?? configuration["DocumentIntelligence__ModelId"]
             ?? "ptr-extractor-v1"; // Default fallback
 
+        Console.WriteLine($"[PdfProcessor] Initialized with ModelId: {_modelId}");
         _logger.LogInformation("PdfProcessor initialized with ModelId: {ModelId}", _modelId);
     }
 
@@ -42,14 +44,19 @@ public class PdfProcessor : IPdfProcessor
     {
         _logger.LogInformation("Processing PDF for filing {FilingId}", filingId);
 
-        // Download PDF to memory
-        using var pdfStream = await _httpClient.GetStreamAsync(pdfUrl, cancellationToken);
+        // Download PDF to memory as a seekable stream (required by Document Intelligence)
+        using var response = await _httpClient.GetAsync(pdfUrl, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var memoryStream = new MemoryStream();
+        await response.Content.CopyToAsync(memoryStream, cancellationToken);
+        memoryStream.Position = 0; // Reset to beginning for Document Intelligence
 
         // Analyze with Document Intelligence using custom trained model
         var operation = await _docIntelClient.AnalyzeDocumentAsync(
             WaitUntil.Completed,
             _modelId,
-            pdfStream,
+            memoryStream,
             cancellationToken: cancellationToken);
 
         var result = operation.Value;
@@ -87,17 +94,84 @@ public class PdfProcessor : IPdfProcessor
             };
         }
 
-        var name = document.Fields.TryGetValue("Name", out var nameField)
-            ? nameField.Content ?? "Unknown"
-            : "Unknown";
+        // Log all available fields to understand what the model actually returns
+        _logger.LogInformation("Document type: {DocumentType}", document.DocumentType);
+        _logger.LogInformation("Available fields: {Fields}", string.Join(", ", document.Fields.Keys));
 
-        var status = document.Fields.TryGetValue("Status", out var statusField)
-            ? statusField.Content ?? "Filed"
-            : "Filed";
+        // The trained model uses lowercase field names and nested structure
+        // filer_information contains: Name, Status, State_District
+        var name = "Unknown";
+        var status = "Filed";
+        var district = "Unknown";
 
-        var district = document.Fields.TryGetValue("State_District", out var districtField)
-            ? districtField.Content ?? "Unknown"
-            : "Unknown";
+        if (document.Fields.TryGetValue("filer_information", out var filerField) &&
+            filerField.FieldType == DocumentFieldType.Dictionary)
+        {
+            var filerFields = filerField.Value.AsDictionary();
+            _logger.LogInformation("filer_information fields: {Fields}", string.Join(", ", filerFields.Keys));
+
+            if (filerFields.TryGetValue("Name", out var nameField))
+            {
+                _logger.LogInformation("Name field type: {Type}", nameField.FieldType);
+
+                // Name might be a nested Dictionary with COLUMN1
+                if (nameField.FieldType == DocumentFieldType.Dictionary)
+                {
+                    var nameFields = nameField.Value.AsDictionary();
+                    _logger.LogInformation("Name sub-fields: {Fields}", string.Join(", ", nameFields.Keys));
+
+                    if (nameFields.TryGetValue("COLUMN1", out var column1Field))
+                    {
+                        name = column1Field.Content ?? "Unknown";
+                        _logger.LogInformation("Extracted Name from COLUMN1: {Name}", name);
+                    }
+                }
+                else
+                {
+                    name = nameField.Content ?? "Unknown";
+                    _logger.LogInformation("Extracted Name directly: {Name}", name);
+                }
+            }
+
+            if (filerFields.TryGetValue("Status", out var statusField))
+            {
+                _logger.LogInformation("Status field type: {Type}", statusField.FieldType);
+
+                if (statusField.FieldType == DocumentFieldType.Dictionary)
+                {
+                    var statusFields = statusField.Value.AsDictionary();
+                    if (statusFields.TryGetValue("COLUMN1", out var column1Field))
+                        status = column1Field.Content ?? "Filed";
+                }
+                else
+                {
+                    status = statusField.Content ?? "Filed";
+                }
+            }
+
+            // Note: Field name is "State-district" with hyphen, not "State_District"
+            if (filerFields.TryGetValue("State-district", out var districtField))
+            {
+                _logger.LogInformation("State-district field type: {Type}", districtField.FieldType);
+
+                if (districtField.FieldType == DocumentFieldType.Dictionary)
+                {
+                    var districtFields = districtField.Value.AsDictionary();
+                    _logger.LogInformation("State-district sub-fields: {Fields}", string.Join(", ", districtFields.Keys));
+
+                    if (districtFields.TryGetValue("COLUMN1", out var column1Field))
+                    {
+                        district = column1Field.Content ?? "Unknown";
+                        _logger.LogInformation("Extracted State-district from COLUMN1: {District}", district);
+                    }
+                }
+                else
+                {
+                    district = districtField.Content ?? "Unknown";
+                    _logger.LogInformation("Extracted State-district directly: {District}", district);
+                }
+            }
+        }
 
         return new FilingInformation
         {
@@ -112,7 +186,8 @@ public class PdfProcessor : IPdfProcessor
         var transactions = new List<Transaction>();
         var document = result.Documents.FirstOrDefault();
 
-        if (document == null || !document.Fields.TryGetValue("Transactions", out var transactionsField))
+        // Use lowercase "transactions" - that's what the trained model returns
+        if (document == null || !document.Fields.TryGetValue("transactions", out var transactionsField))
         {
             _logger.LogWarning("No transactions field found in document");
             return transactions;
