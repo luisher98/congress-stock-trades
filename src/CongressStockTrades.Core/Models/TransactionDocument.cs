@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace CongressStockTrades.Core.Models;
 
@@ -9,15 +10,18 @@ namespace CongressStockTrades.Core.Models;
 public class TransactionDocument
 {
     /// <summary>
-    /// Cosmos DB document ID (auto-generated GUID).
+    /// Cosmos DB document ID.
     /// </summary>
-    [JsonPropertyName("id")]
-    public string Id { get; set; } = Guid.NewGuid().ToString();
+    [JsonPropertyName("id")]  // For System.Text.Json
+    [JsonProperty("id")]      // For Newtonsoft.Json (used by Cosmos SDK v3)
+    public required string Id { get; set; }
 
     /// <summary>
     /// Filing identifier used as the partition key.
     /// Example: "20250123456"
     /// </summary>
+    [JsonPropertyName("filingId")]  // For System.Text.Json - camelCase to match Cosmos DB partition key path
+    [JsonProperty("filingId")]      // For Newtonsoft.Json (used by Cosmos SDK v3) - camelCase to match Cosmos DB partition key path
     public required string FilingId { get; set; }
 
     /// <summary>

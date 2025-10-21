@@ -16,7 +16,7 @@ public class ProcessFilingFunction
     private readonly IPdfProcessor _pdfProcessor;
     private readonly IDataValidator _validator;
     private readonly ITransactionRepository _repository;
-    // private readonly INotificationService _notificationService; // DISABLED - SignalR causing DI hangs
+    private readonly INotificationService _notificationService;
     private readonly ILogger<ProcessFilingFunction> _logger;
 
     /// <summary>
@@ -26,20 +26,14 @@ public class ProcessFilingFunction
         IPdfProcessor pdfProcessor,
         IDataValidator validator,
         ITransactionRepository repository,
-        // INotificationService notificationService, // DISABLED - SignalR causing DI hangs
+        INotificationService notificationService,
         ILogger<ProcessFilingFunction> logger)
     {
-        Console.WriteLine("[ProcessFilingFunction] Constructor starting");
         _logger = logger;
-        _logger.LogInformation("ProcessFilingFunction constructor starting...");
-
         _pdfProcessor = pdfProcessor;
         _validator = validator;
         _repository = repository;
-        // _notificationService = notificationService;
-
-        Console.WriteLine("[ProcessFilingFunction] Constructor completed");
-        _logger.LogInformation("ProcessFilingFunction constructor completed");
+        _notificationService = notificationService;
     }
 
     /// <summary>
@@ -99,18 +93,18 @@ public class ProcessFilingFunction
                 message.FilingId,
                 transactionDocument.Transactions.Count);
 
-            // Broadcast to connected clients via SignalR (DISABLED)
-            // await _notificationService.BroadcastNewTransactionAsync(transactionDocument);
+            // Broadcast to connected clients via SignalR
+            await _notificationService.BroadcastNewTransactionAsync(transactionDocument);
         }
         catch (ValidationException ex)
         {
             _logger.LogError(ex, "Validation failed for filing {FilingId}", message?.FilingId);
 
-            // Notify clients of error (DISABLED)
-            // if (message != null)
-            // {
-            //     await _notificationService.NotifyErrorAsync(message.FilingId, ex.Message);
-            // }
+            // Notify clients of error
+            if (message != null)
+            {
+                await _notificationService.NotifyErrorAsync(message.FilingId, ex.Message);
+            }
 
             throw; // Will retry and eventually move to poison queue
         }
@@ -118,11 +112,11 @@ public class ProcessFilingFunction
         {
             _logger.LogError(ex, "Error processing filing {FilingId}", message?.FilingId);
 
-            // Notify clients of error (DISABLED)
-            // if (message != null)
-            // {
-            //     await _notificationService.NotifyErrorAsync(message.FilingId, ex.Message);
-            // }
+            // Notify clients of error
+            if (message != null)
+            {
+                await _notificationService.NotifyErrorAsync(message.FilingId, ex.Message);
+            }
 
             throw; // Will retry and eventually move to poison queue
         }

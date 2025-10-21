@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace CongressStockTrades.Core.Models;
 
@@ -13,7 +14,8 @@ public class ProcessedFiling
     /// Filing identifier (serves as both document ID and partition key).
     /// Example: "20250123456"
     /// </summary>
-    [JsonPropertyName("id")]
+    [JsonPropertyName("id")]  // For System.Text.Json
+    [JsonProperty("id")]      // For Newtonsoft.Json (used by Cosmos SDK v3)
     public required string Id { get; set; }
 
     /// <summary>

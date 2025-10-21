@@ -132,11 +132,11 @@ public class DataValidator : IDataValidator
 
         var normalized = name.ToLowerInvariant();
 
-        // Remove common titles
-        normalized = Regex.Replace(normalized, @"^hon\.?\s+", "", RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"^dr\.?\s+", "", RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"\s+mrs\.?\s+", " ", RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"\s+mr\.?\s+", " ", RegexOptions.IgnoreCase);
+        // Remove common titles (at start or anywhere in the name)
+        normalized = Regex.Replace(normalized, @"\bhon\.+\s*", "", RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\bdr\.+\s*", "", RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\bmrs\.+\s*", "", RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\bmr\.+\s*", "", RegexOptions.IgnoreCase);
 
         // Remove all punctuation including dots and commas
         normalized = Regex.Replace(normalized, @"[.,]", "");

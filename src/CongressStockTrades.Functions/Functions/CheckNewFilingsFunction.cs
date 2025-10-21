@@ -53,7 +53,7 @@ public class CheckNewFilingsFunction
     /// Timer trigger that runs every 5 minutes to check for new filings.
     /// </summary>
     [Function("CheckNewFilings")]
-    public async Task Run([TimerTrigger("*/30 * * * * *")] TimerInfo timerInfo)
+    public async Task Run([TimerTrigger("0 */5 * * * *")] TimerInfo timerInfo)
     {
         _logger.LogInformation("Timer trigger fired at: {Time}", DateTime.UtcNow);
 

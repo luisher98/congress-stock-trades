@@ -39,6 +39,10 @@ public class TransactionRepository : ITransactionRepository
     {
         _logger.LogInformation("Storing transaction for filing {FilingId}", document.FilingId);
 
+        // Debug: Serialize with Newtonsoft.Json to see what Cosmos SDK sees
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(document, Newtonsoft.Json.Formatting.None);
+        _logger.LogInformation("Newtonsoft serialized (first 500 chars): {Json}", json.Substring(0, Math.Min(500, json.Length)));
+
         try
         {
             await _transactionsContainer.CreateItemAsync(

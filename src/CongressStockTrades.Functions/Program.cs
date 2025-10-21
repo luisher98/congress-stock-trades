@@ -36,9 +36,7 @@ var host = new HostBuilder()
         // Register HttpClient for PdfProcessor
         services.AddHttpClient();
 
-        // TEMPORARILY DISABLED: SignalR Service - causing DI to hang
-        // TODO: Re-enable after fixing the hub context initialization issue
-        /*
+        // SignalR Service
         services.AddSingleton<ServiceHubContext>(sp =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
@@ -71,14 +69,12 @@ var host = new HostBuilder()
                 throw;
             }
         });
-        */
 
         // Register services
         services.AddSingleton<IPdfProcessor, PdfProcessor>();
         services.AddSingleton<IDataValidator, DataValidator>();
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
-        // TEMPORARILY DISABLED: NotificationService (depends on SignalR)
-        // services.AddSingleton<INotificationService, SignalRNotificationService>();
+        services.AddSingleton<INotificationService, SignalRNotificationService>();
 
         // Register logging
         services.AddLogging();

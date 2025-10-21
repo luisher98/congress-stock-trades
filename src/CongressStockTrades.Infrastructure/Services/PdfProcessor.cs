@@ -20,18 +20,14 @@ public class PdfProcessor : IPdfProcessor
         IConfiguration configuration,
         ILogger<PdfProcessor> logger)
     {
-        Console.WriteLine("[PdfProcessor] Constructor called");
         _httpClient = httpClient;
         _docIntelClient = docIntelClient;
         _logger = logger;
-
-        _logger.LogInformation("PdfProcessor initializing...");
 
         _modelId = Environment.GetEnvironmentVariable("DocumentIntelligence__ModelId")
             ?? configuration["DocumentIntelligence__ModelId"]
             ?? "ptr-extractor-v1"; // Default fallback
 
-        Console.WriteLine($"[PdfProcessor] Initialized with ModelId: {_modelId}");
         _logger.LogInformation("PdfProcessor initialized with ModelId: {ModelId}", _modelId);
     }
 
@@ -71,6 +67,7 @@ public class PdfProcessor : IPdfProcessor
 
         return new TransactionDocument
         {
+            Id = filingId, // Use FilingId as the Cosmos DB document id
             FilingId = filingId,
             PdfUrl = pdfUrl,
             Filing_Information = filingInfo,
@@ -94,12 +91,8 @@ public class PdfProcessor : IPdfProcessor
             };
         }
 
-        // Log all available fields to understand what the model actually returns
-        _logger.LogInformation("Document type: {DocumentType}", document.DocumentType);
-        _logger.LogInformation("Available fields: {Fields}", string.Join(", ", document.Fields.Keys));
-
-        // The trained model uses lowercase field names and nested structure
-        // filer_information contains: Name, Status, State_District
+        // Extract filer information from nested dictionary structure
+        // The custom model returns filer_information with nested COLUMN1 fields
         var name = "Unknown";
         var status = "Filed";
         var district = "Unknown";
@@ -108,68 +101,33 @@ public class PdfProcessor : IPdfProcessor
             filerField.FieldType == DocumentFieldType.Dictionary)
         {
             var filerFields = filerField.Value.AsDictionary();
-            _logger.LogInformation("filer_information fields: {Fields}", string.Join(", ", filerFields.Keys));
 
-            if (filerFields.TryGetValue("Name", out var nameField))
+            // Extract Name from nested COLUMN1
+            if (filerFields.TryGetValue("Name", out var nameField) &&
+                nameField.FieldType == DocumentFieldType.Dictionary)
             {
-                _logger.LogInformation("Name field type: {Type}", nameField.FieldType);
-
-                // Name might be a nested Dictionary with COLUMN1
-                if (nameField.FieldType == DocumentFieldType.Dictionary)
-                {
-                    var nameFields = nameField.Value.AsDictionary();
-                    _logger.LogInformation("Name sub-fields: {Fields}", string.Join(", ", nameFields.Keys));
-
-                    if (nameFields.TryGetValue("COLUMN1", out var column1Field))
-                    {
-                        name = column1Field.Content ?? "Unknown";
-                        _logger.LogInformation("Extracted Name from COLUMN1: {Name}", name);
-                    }
-                }
-                else
-                {
-                    name = nameField.Content ?? "Unknown";
-                    _logger.LogInformation("Extracted Name directly: {Name}", name);
-                }
+                var nameFields = nameField.Value.AsDictionary();
+                if (nameFields.TryGetValue("COLUMN1", out var column1Field))
+                    name = column1Field.Content ?? "Unknown";
             }
 
-            if (filerFields.TryGetValue("Status", out var statusField))
+            // Extract Status from nested COLUMN1
+            if (filerFields.TryGetValue("Status", out var statusField) &&
+                statusField.FieldType == DocumentFieldType.Dictionary)
             {
-                _logger.LogInformation("Status field type: {Type}", statusField.FieldType);
-
-                if (statusField.FieldType == DocumentFieldType.Dictionary)
-                {
-                    var statusFields = statusField.Value.AsDictionary();
-                    if (statusFields.TryGetValue("COLUMN1", out var column1Field))
-                        status = column1Field.Content ?? "Filed";
-                }
-                else
-                {
-                    status = statusField.Content ?? "Filed";
-                }
+                var statusFields = statusField.Value.AsDictionary();
+                if (statusFields.TryGetValue("COLUMN1", out var column1Field))
+                    status = column1Field.Content ?? "Filed";
             }
 
-            // Note: Field name is "State-district" with hyphen, not "State_District"
-            if (filerFields.TryGetValue("State-district", out var districtField))
+            // Extract State-district from nested COLUMN1
+            // Note: Field name uses hyphen "State-district", not underscore
+            if (filerFields.TryGetValue("State-district", out var districtField) &&
+                districtField.FieldType == DocumentFieldType.Dictionary)
             {
-                _logger.LogInformation("State-district field type: {Type}", districtField.FieldType);
-
-                if (districtField.FieldType == DocumentFieldType.Dictionary)
-                {
-                    var districtFields = districtField.Value.AsDictionary();
-                    _logger.LogInformation("State-district sub-fields: {Fields}", string.Join(", ", districtFields.Keys));
-
-                    if (districtFields.TryGetValue("COLUMN1", out var column1Field))
-                    {
-                        district = column1Field.Content ?? "Unknown";
-                        _logger.LogInformation("Extracted State-district from COLUMN1: {District}", district);
-                    }
-                }
-                else
-                {
-                    district = districtField.Content ?? "Unknown";
-                    _logger.LogInformation("Extracted State-district directly: {District}", district);
-                }
+                var districtFields = districtField.Value.AsDictionary();
+                if (districtFields.TryGetValue("COLUMN1", out var column1Field))
+                    district = column1Field.Content ?? "Unknown";
             }
         }
 
@@ -207,10 +165,10 @@ public class PdfProcessor : IPdfProcessor
                     transactions.Add(new Transaction
                     {
                         Asset = fields.TryGetValue("Asset", out var asset) ? asset.Content?.Trim() ?? "" : "",
-                        Transaction_Type = fields.TryGetValue("Transaction_Type", out var type) ? type.Content?.Trim() ?? "" : "",
+                        Transaction_Type = fields.TryGetValue("Transaction Type", out var type) ? type.Content?.Trim() ?? "" : "",
                         Date = fields.TryGetValue("Date", out var date) ? date.Content?.Trim() ?? "" : "",
                         Amount = fields.TryGetValue("Amount", out var amount) ? amount.Content?.Trim() ?? "" : "",
-                        ID_Owner = fields.TryGetValue("ID_Owner", out var owner) ? owner.Content?.Trim() ?? "" : ""
+                        ID_Owner = fields.TryGetValue("Owner", out var owner) ? owner.Content?.Trim() ?? "" : ""
                     });
                 }
             }
