@@ -43,6 +43,7 @@ public class SignalRNotificationServiceTests
         // Arrange
         var document = new TransactionDocument
         {
+            Id = "20250123456",
             FilingId = "20250123456",
             PdfUrl = "https://house.gov/test.pdf",
             Filing_Information = new FilingInformation

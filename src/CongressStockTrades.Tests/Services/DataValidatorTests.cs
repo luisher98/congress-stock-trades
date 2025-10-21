@@ -135,6 +135,7 @@ public class DataValidatorTests
     {
         return new TransactionDocument
         {
+            Id = "20250123456",
             FilingId = "20250123456",
             PdfUrl = "https://example.com/filing.pdf",
             Filing_Information = new FilingInformation
