@@ -80,8 +80,28 @@ public class CongressApiService : ICongressApiService
             }
 
             // Search for matching name (Congress uses "Last, First" format)
+            // Try exact match first
             var member = result.Members.FirstOrDefault(m =>
                 m.Name?.Equals(name, StringComparison.OrdinalIgnoreCase) == true);
+
+            // If no exact match, try fuzzy matching (handles "Hon. Thomas Suozzi" vs "Suozzi, Thomas R.")
+            if (member == null)
+            {
+                var normalizedSearchName = NormalizeName(name);
+                member = result.Members.FirstOrDefault(m =>
+                {
+                    if (m.Name == null) return false;
+                    var normalizedMemberName = NormalizeName(m.Name);
+                    return normalizedMemberName.Contains(normalizedSearchName, StringComparison.OrdinalIgnoreCase) ||
+                           normalizedSearchName.Contains(normalizedMemberName, StringComparison.OrdinalIgnoreCase);
+                });
+
+                if (member != null)
+                {
+                    _logger.LogInformation("Found member via fuzzy match: '{SearchName}' matched to '{MemberName}'",
+                        name, member.Name);
+                }
+            }
 
             if (member?.BioguideId != null)
             {
@@ -214,6 +234,32 @@ public class CongressApiService : ICongressApiService
             _logger.LogDebug(ex, "Error checking membership in {Committee}", committeeCode);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Normalizes a member name for fuzzy matching.
+    /// Removes titles, punctuation, and extra whitespace.
+    /// </summary>
+    private string NormalizeName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return string.Empty;
+
+        // Remove common titles
+        var normalized = name
+            .Replace("Hon.", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Rep.", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Sen.", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Dr.", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Mr.", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Mrs.", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("Ms.", "", StringComparison.OrdinalIgnoreCase);
+
+        // Remove punctuation and extra spaces
+        normalized = new string(normalized.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
+        normalized = string.Join(" ", normalized.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+
+        return normalized.Trim();
     }
 
     #region API Response Models

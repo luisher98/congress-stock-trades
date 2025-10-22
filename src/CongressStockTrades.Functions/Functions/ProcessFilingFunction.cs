@@ -84,23 +84,36 @@ public class ProcessFilingFunction
             // Validate extracted data
             _validator.Validate(transactionDocument, message.Name, message.Office);
 
-            // Store in Cosmos DB
-            await _repository.StoreTransactionAsync(transactionDocument);
+            // Store in Cosmos DB (this will return false if already exists due to duplicate processing)
+            var wasStored = await _repository.StoreTransactionAsync(transactionDocument);
+
+            // Mark as processed
             await _repository.MarkAsProcessedAsync(
                 message.FilingId,
                 message.PdfUrl,
                 message.Name);
 
-            _logger.LogInformation(
-                "Successfully processed filing {FilingId} with {Count} transactions",
-                message.FilingId,
-                transactionDocument.Transactions.Count);
+            // Only send notifications if this was the first instance to store it
+            // This prevents duplicate notifications when multiple instances process the same filing
+            if (wasStored)
+            {
+                _logger.LogInformation(
+                    "Successfully processed filing {FilingId} with {Count} transactions",
+                    message.FilingId,
+                    transactionDocument.Transactions.Count);
 
-            // Broadcast to connected clients via SignalR
-            await _notificationService.BroadcastNewTransactionAsync(transactionDocument);
+                // Broadcast to connected clients via SignalR
+                await _notificationService.BroadcastNewTransactionAsync(transactionDocument);
 
-            // Send Telegram notification
-            await _telegramService.SendTransactionNotificationAsync(transactionDocument);
+                // Send Telegram notification
+                await _telegramService.SendTransactionNotificationAsync(transactionDocument);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Filing {FilingId} was already stored by another instance, skipping notifications",
+                    message.FilingId);
+            }
         }
         catch (ValidationException ex)
         {

@@ -35,7 +35,7 @@ public class TransactionRepository : ITransactionRepository
         _processedFilingsContainer = database.GetContainer("processed-filings");
     }
 
-    public async Task StoreTransactionAsync(TransactionDocument document, CancellationToken cancellationToken = default)
+    public async Task<bool> StoreTransactionAsync(TransactionDocument document, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Storing transaction for filing {FilingId}", document.FilingId);
 
@@ -51,10 +51,12 @@ public class TransactionRepository : ITransactionRepository
                 cancellationToken: cancellationToken);
 
             _logger.LogInformation("Successfully stored transaction for filing {FilingId}", document.FilingId);
+            return true; // Successfully stored
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
             _logger.LogWarning("Transaction for filing {FilingId} already exists", document.FilingId);
+            return false; // Already existed
         }
     }
 

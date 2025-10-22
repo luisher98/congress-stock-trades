@@ -14,8 +14,9 @@ public interface ITransactionRepository
     /// </summary>
     /// <param name="document">The transaction document to store</param>
     /// <param name="cancellationToken">Cancellation token for async operations</param>
+    /// <returns>True if the document was stored, false if it already existed (409 Conflict)</returns>
     /// <exception cref="System.Exception">Thrown when Cosmos DB operation fails</exception>
-    Task StoreTransactionAsync(TransactionDocument document, CancellationToken cancellationToken = default);
+    Task<bool> StoreTransactionAsync(TransactionDocument document, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Checks if a filing has already been processed by querying the 'processed-filings' container.
