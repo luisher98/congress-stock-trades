@@ -90,6 +90,13 @@ public class FilingInformation
     public required string State_District { get; set; }
 
     /// <summary>
+    /// Party affiliation of the member.
+    /// Examples: "Democratic", "Republican", "Independent"
+    /// Populated from Congress.gov API.
+    /// </summary>
+    public string? Party { get; set; }
+
+    /// <summary>
     /// List of committee memberships for this member (optional).
     /// Populated from Congress.gov API if available.
     /// </summary>

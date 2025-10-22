@@ -100,7 +100,8 @@ public class TelegramNotificationService
         sb.AppendLine();
 
         // Politician Info
-        sb.AppendLine($"👤 *{EscapeMarkdown(transaction.Filing_Information.Name)}*");
+        var partyBadge = GetPartyBadge(transaction.Filing_Information.Party);
+        sb.AppendLine($"{partyBadge} *{EscapeMarkdown(transaction.Filing_Information.Name)}*");
         sb.AppendLine($"📍 District: {transaction.Filing_Information.State_District}");
 
         if (!string.IsNullOrEmpty(transaction.Filing_Date))
@@ -263,8 +264,22 @@ public class TelegramNotificationService
         };
     }
 
+    private string GetPartyBadge(string? party)
+    {
+        if (string.IsNullOrEmpty(party))
+            return "👤";
+
+        return party switch
+        {
+            "Democratic" => "🔵",
+            "Republican" => "🔴",
+            "Independent" => "⚪",
+            _ => "👤"
+        };
+    }
+
     /// <summary>
-    /// Cleans asset name by removing metadata tags like FILING STATUS, SUBHOLDING OF, DESCRIPTION.
+    /// Cleans asset name by removing metadata tags and bracket notations like [ST], [GS].
     /// </summary>
     private string CleanAssetName(string asset)
     {
@@ -299,6 +314,9 @@ public class TelegramNotificationService
             }
         }
 
+        // Remove bracket notations like [ST], [GS], [CR], [MF], [OP]
+        cleanedAsset = System.Text.RegularExpressions.Regex.Replace(cleanedAsset, @"\s*\[[A-Z]{2}\]\s*", " ");
+
         // Clean up multiple spaces and trim
         cleanedAsset = System.Text.RegularExpressions.Regex.Replace(cleanedAsset, @"\s+", " ").Trim();
 
@@ -321,18 +339,18 @@ public class TelegramNotificationService
 
     /// <summary>
     /// Escapes special characters for Telegram Markdown.
+    /// Only escapes characters that would break formatting, not all special chars.
     /// </summary>
     private string EscapeMarkdown(string text)
     {
         if (string.IsNullOrEmpty(text)) return text;
 
-        // Escape special Markdown characters
-        var specialChars = new[] { '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!' };
-
-        foreach (var c in specialChars)
-        {
-            text = text.Replace(c.ToString(), $"\\{c}");
-        }
+        // Only escape characters that actually break Markdown formatting
+        // Don't escape: dots, dashes, slashes (used in normal text)
+        text = text.Replace("_", "\\_");
+        text = text.Replace("*", "\\*");
+        text = text.Replace("[", "\\[");
+        text = text.Replace("`", "\\`");
 
         return text;
     }

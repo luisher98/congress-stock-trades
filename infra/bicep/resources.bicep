@@ -107,23 +107,6 @@ resource transactionsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabas
   }
 }
 
-// Cosmos DB Container: processed-filings
-resource processedFilingsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
-  parent: cosmosDb
-  name: 'processed-filings'
-  properties: {
-    resource: {
-      id: 'processed-filings'
-      partitionKey: {
-        paths: [
-          '/id'
-        ]
-        kind: 'Hash'
-      }
-    }
-  }
-}
-
 // SignalR Service (Free F1 tier)
 resource signalR 'Microsoft.SignalRService/signalR@2023-02-01' = {
   name: signalRName

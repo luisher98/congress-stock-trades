@@ -1,6 +1,22 @@
 namespace CongressStockTrades.Core.Models;
 
 /// <summary>
+/// Result of looking up a congressional member, including bioguide ID and party affiliation.
+/// </summary>
+public class MemberLookupResult
+{
+    /// <summary>
+    /// Bioguide ID of the member (e.g., "P000197").
+    /// </summary>
+    public required string BioguideId { get; set; }
+
+    /// <summary>
+    /// Party affiliation (e.g., "Democratic", "Republican", "Independent").
+    /// </summary>
+    public string? PartyName { get; set; }
+}
+
+/// <summary>
 /// Represents a congressional committee and member's role within it.
 /// Data sourced from Congress.gov API.
 /// </summary>

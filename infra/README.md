@@ -22,8 +22,7 @@ This directory contains Infrastructure as Code (IaC) templates for deploying the
 │  │   └── Queue: filings-to-process                   │
 │  ├── Cosmos DB (Serverless)                          │
 │  │   ├── Database: CongressTrades                    │
-│  │   ├── Container: transactions                     │
-│  │   └── Container: processed-filings                │
+│  │   └── Container: transactions                     │
 │  ├── SignalR Service (Free F1)                       │
 │  ├── Document Intelligence (S0)                      │
 │  ├── Application Insights                            │
@@ -207,8 +206,7 @@ Set in `resources.bicep` under `functionApp.properties.siteConfig.appSettings`:
 - **Mode**: Serverless (autoscaling, pay-per-request)
 - **Consistency**: Session
 - **Containers**:
-  - `transactions`: Partition key `/filingId`
-  - `processed-filings`: Partition key `/id`
+  - `transactions`: Partition key `/filingId` (includes deduplication via conflict detection)
 
 ### Storage Account
 

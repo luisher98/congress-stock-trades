@@ -18,6 +18,14 @@ public interface ICongressApiService
     Task<string?> GetBioguideIdByNameAsync(string name, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Searches for a congressional member by name and returns their bioguide ID and party affiliation.
+    /// </summary>
+    /// <param name="name">Member's full name (e.g., "Pelosi, Nancy")</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Member lookup result if found, null otherwise</returns>
+    Task<MemberLookupResult?> GetMemberInfoByNameAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets all committee memberships for a specific member using their bioguide ID.
     /// </summary>
     /// <param name="bioguideId">Member's bioguide ID (e.g., "P000197")</param>

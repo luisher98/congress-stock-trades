@@ -255,19 +255,24 @@ public class PdfProcessor : IPdfProcessor
                 return;
             }
 
-            _logger.LogInformation("Looking up committees for {Name}", filingInfo.Name);
+            _logger.LogInformation("Looking up member info and committees for {Name}", filingInfo.Name);
 
-            // Get bioguide ID from name
-            var bioguideId = await _congressApi.GetBioguideIdByNameAsync(filingInfo.Name, cancellationToken);
+            // Get member info (bioguide ID and party)
+            var memberInfo = await _congressApi.GetMemberInfoByNameAsync(filingInfo.Name, cancellationToken);
 
-            if (string.IsNullOrEmpty(bioguideId))
+            if (memberInfo == null)
             {
-                _logger.LogWarning("Could not find bioguide ID for {Name}", filingInfo.Name);
+                _logger.LogWarning("Could not find member info for {Name}", filingInfo.Name);
                 return;
             }
 
+            // Store party affiliation
+            filingInfo.Party = memberInfo.PartyName;
+            _logger.LogInformation("Found member {BioguideId} with party {Party} for {Name}",
+                memberInfo.BioguideId, memberInfo.PartyName ?? "Unknown", filingInfo.Name);
+
             // Get committee memberships
-            var committees = await _congressApi.GetMemberCommitteesAsync(bioguideId, null, cancellationToken);
+            var committees = await _congressApi.GetMemberCommitteesAsync(memberInfo.BioguideId, null, cancellationToken);
 
             if (committees.Any())
             {

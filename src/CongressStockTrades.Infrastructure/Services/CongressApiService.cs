@@ -132,6 +132,101 @@ public class CongressApiService : ICongressApiService
         }
     }
 
+    public async Task<MemberLookupResult?> GetMemberInfoByNameAsync(string name, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+
+        var cacheKey = $"memberinfo_{name.ToLowerInvariant()}";
+
+        if (_cache.TryGetValue<MemberLookupResult>(cacheKey, out var cachedResult))
+        {
+            _logger.LogDebug("Cache hit for member info: {Name}", name);
+            return cachedResult;
+        }
+
+        try
+        {
+            _logger.LogInformation("Searching for member info: {Name}", name);
+
+            // Get current members and search by name
+            var url = $"{BaseUrl}/member?currentMember=true&limit=250&api_key={_apiKey}";
+            var response = await _httpClient.GetAsync(url, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed to fetch members: {StatusCode}", response.StatusCode);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            var result = JsonSerializer.Deserialize<MemberListResponse>(json);
+
+            if (result?.Members == null)
+            {
+                _logger.LogWarning("No members found in API response");
+                return null;
+            }
+
+            // Search for matching name (Congress uses "Last, First" format)
+            // Try exact match first
+            var member = result.Members.FirstOrDefault(m =>
+                m.Name?.Equals(name, StringComparison.OrdinalIgnoreCase) == true);
+
+            // If no exact match, try fuzzy matching (handles "Hon. Thomas Suozzi" vs "Suozzi, Thomas R.")
+            if (member == null)
+            {
+                var normalizedSearchName = NormalizeName(name);
+                var searchNameParts = normalizedSearchName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                member = result.Members.FirstOrDefault(m =>
+                {
+                    if (m.Name == null) return false;
+                    var normalizedMemberName = NormalizeName(m.Name);
+                    var memberNameParts = normalizedMemberName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                    // Check if any significant name part matches (at least 3 characters to avoid false positives)
+                    var searchSignificantParts = searchNameParts.Where(p => p.Length >= 3).ToList();
+                    var memberSignificantParts = memberNameParts.Where(p => p.Length >= 3).ToList();
+
+                    // Match if at least 2 name parts match (handles different orderings like "Thomas Suozzi" vs "Suozzi Thomas")
+                    var matchCount = searchSignificantParts.Count(sp =>
+                        memberSignificantParts.Any(mp => mp.Equals(sp, StringComparison.OrdinalIgnoreCase)));
+
+                    return matchCount >= 2;
+                });
+
+                if (member != null)
+                {
+                    _logger.LogInformation("Found member via fuzzy match: '{SearchName}' matched to '{MemberName}'",
+                        name, member.Name);
+                }
+            }
+
+            if (member?.BioguideId != null)
+            {
+                var memberInfo = new MemberLookupResult
+                {
+                    BioguideId = member.BioguideId,
+                    PartyName = member.PartyName
+                };
+
+                _cache.Set(cacheKey, memberInfo, CacheDuration);
+                _logger.LogInformation("Found member {BioguideId} ({Party}) for {Name}",
+                    member.BioguideId, member.PartyName ?? "Unknown", name);
+                return memberInfo;
+            }
+
+            _logger.LogWarning("No member info found for: {Name}", name);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching member info for {Name}", name);
+            return null;
+        }
+    }
+
     public async Task<List<CommitteeMembership>> GetMemberCommitteesAsync(
         string bioguideId,
         int? congress = null,
@@ -150,28 +245,25 @@ public class CongressApiService : ICongressApiService
 
         try
         {
-            _logger.LogInformation("Fetching committees for member {BioguideId} from unitedstates/congress-legislators", bioguideId);
+            _logger.LogInformation("Committee lookup for {BioguideId}", bioguideId);
 
-            // Use the unitedstates/congress-legislators data source (more reliable than Congress.gov API)
-            var url = "https://theunitedstates.io/congress-legislators/committee-membership-current.yaml";
-            var response = await _httpClient.GetAsync(url, cancellationToken);
+            // Committee lookup disabled - no free reliable API available
+            // Options explored:
+            // 1. Congress.gov API - doesn't provide committee membership
+            // 2. unitedstates/congress-legislators YAML - unreliable
+            // 3. ProPublica Congress API - deprecated
+            // 4. GovTrack - deprecated their API
+            //
+            // To enable: Wait for Congress.gov to add this feature or find alternative source
+            _logger.LogInformation("Committee lookup disabled - no free reliable data source available");
 
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Failed to fetch committee data: {StatusCode}", response.StatusCode);
-                return new List<CommitteeMembership>();
-            }
-
-            var yaml = await response.Content.ReadAsStringAsync(cancellationToken);
-            var committees = ParseCommitteeMemberships(yaml, bioguideId);
-
-            _cache.Set(cacheKey, committees, CacheDuration);
-            _logger.LogInformation("Found {Count} committees for {BioguideId}", committees.Count, bioguideId);
-            return committees;
+            var emptyList = new List<CommitteeMembership>();
+            _cache.Set(cacheKey, emptyList, CacheDuration);
+            return emptyList;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching committees for {BioguideId}", bioguideId);
+            _logger.LogError(ex, "Error in committee lookup for {BioguideId}", bioguideId);
             return new List<CommitteeMembership>();
         }
     }
@@ -276,6 +368,9 @@ public class CongressApiService : ICongressApiService
 
         [JsonPropertyName("name")]
         public string? Name { get; set; }
+
+        [JsonPropertyName("partyName")]
+        public string? PartyName { get; set; }
     }
 
     private class CommitteeListResponse
