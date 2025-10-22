@@ -113,17 +113,17 @@ public class PdfClassifier : IPdfClassifier
             };
         }
 
-        var isPtrForm = document.DocType?.ToLower().Contains("ptr") == true;
+        var isPtrForm = document.DocumentType?.ToLower().Contains("ptr") == true;
         var confidence = document.Confidence;
 
         _logger.LogInformation("[Classifier] Classification result: {DocType} (confidence: {Confidence})",
-            document.DocType, confidence);
+            document.DocumentType, confidence);
 
         return new PdfClassificationResult
         {
             IsValidPtrForm = isPtrForm,
             Confidence = confidence,
-            Reason = $"Classified as: {document.DocType}"
+            Reason = $"Classified as: {document.DocumentType}"
         };
     }
 
@@ -182,25 +182,4 @@ public class PdfClassifier : IPdfClassifier
             Reason = $"Heuristic check: {foundKeywords}/{requiredKeywords.Length} keywords found"
         };
     }
-}
-
-/// <summary>
-/// Result of PDF classification.
-/// </summary>
-public class PdfClassificationResult
-{
-    /// <summary>
-    /// Whether the PDF is a valid PTR form.
-    /// </summary>
-    public bool IsValidPtrForm { get; set; }
-
-    /// <summary>
-    /// Confidence score (0.0 to 1.0).
-    /// </summary>
-    public double Confidence { get; set; }
-
-    /// <summary>
-    /// Reason for classification decision.
-    /// </summary>
-    public required string Reason { get; set; }
 }

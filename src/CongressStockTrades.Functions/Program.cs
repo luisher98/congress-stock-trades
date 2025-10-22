@@ -75,6 +75,7 @@ var host = new HostBuilder()
         services.AddSingleton<IDataValidator, DataValidator>();
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
         services.AddSingleton<INotificationService, SignalRNotificationService>();
+        services.AddSingleton<TelegramNotificationService>();
 
         // Register logging
         services.AddLogging();

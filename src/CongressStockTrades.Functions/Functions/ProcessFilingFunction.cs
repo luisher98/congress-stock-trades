@@ -17,6 +17,7 @@ public class ProcessFilingFunction
     private readonly IDataValidator _validator;
     private readonly ITransactionRepository _repository;
     private readonly INotificationService _notificationService;
+    private readonly TelegramNotificationService _telegramService;
     private readonly ILogger<ProcessFilingFunction> _logger;
 
     /// <summary>
@@ -27,6 +28,7 @@ public class ProcessFilingFunction
         IDataValidator validator,
         ITransactionRepository repository,
         INotificationService notificationService,
+        TelegramNotificationService telegramService,
         ILogger<ProcessFilingFunction> logger)
     {
         _logger = logger;
@@ -34,6 +36,7 @@ public class ProcessFilingFunction
         _validator = validator;
         _repository = repository;
         _notificationService = notificationService;
+        _telegramService = telegramService;
     }
 
     /// <summary>
@@ -95,6 +98,9 @@ public class ProcessFilingFunction
 
             // Broadcast to connected clients via SignalR
             await _notificationService.BroadcastNewTransactionAsync(transactionDocument);
+
+            // Send Telegram notification
+            await _telegramService.SendTransactionNotificationAsync(transactionDocument);
         }
         catch (ValidationException ex)
         {
