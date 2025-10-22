@@ -116,17 +116,34 @@ public class TelegramNotificationService
         // Committee Memberships
         if (transaction.Filing_Information.Committees?.Any() == true)
         {
+            sb.AppendLine();
+
+            // Show key committees prominently
             var keyCommittees = transaction.Filing_Information.Committees
                 .Where(c => IsFinanciallyRelevantCommittee(c.CommitteeCode))
                 .ToList();
 
+            var otherCommittees = transaction.Filing_Information.Committees
+                .Where(c => !IsFinanciallyRelevantCommittee(c.CommitteeCode))
+                .ToList();
+
             if (keyCommittees.Any())
             {
-                sb.AppendLine();
-                sb.AppendLine("⚠️ *Key Committee Memberships:*");
+                sb.AppendLine("⚠️ *Key Committees:*");
                 foreach (var committee in keyCommittees)
                 {
-                    var role = !string.IsNullOrEmpty(committee.Role) ? $" ({committee.Role})" : "";
+                    var role = !string.IsNullOrEmpty(committee.Role) ? $" \\({committee.Role}\\)" : "";
+                    sb.AppendLine($"  • {EscapeMarkdown(committee.CommitteeName)}{role}");
+                }
+            }
+
+            if (otherCommittees.Any())
+            {
+                if (keyCommittees.Any()) sb.AppendLine();
+                sb.AppendLine("📋 *Other Committees:*");
+                foreach (var committee in otherCommittees)
+                {
+                    var role = !string.IsNullOrEmpty(committee.Role) ? $" \\({committee.Role}\\)" : "";
                     sb.AppendLine($"  • {EscapeMarkdown(committee.CommitteeName)}{role}");
                 }
             }
@@ -140,24 +157,32 @@ public class TelegramNotificationService
 
         foreach (var (tx, index) in transaction.Transactions.Select((t, i) => (t, i + 1)))
         {
-            sb.AppendLine($"*Transaction {index}:*");
+            sb.AppendLine($"━━━━━━━━━━━━━━");
+            sb.AppendLine($"*Transaction {index}*");
+            sb.AppendLine();
 
-            // Asset type badge
+            // Asset name (cleaned)
             var assetTypeBadge = GetAssetTypeBadge(tx.AssetType);
-            sb.AppendLine($"{assetTypeBadge} Asset: {EscapeMarkdown(tx.Asset)}");
+            var cleanedAsset = CleanAssetName(tx.Asset);
+            sb.AppendLine($"{assetTypeBadge} *{EscapeMarkdown(cleanedAsset)}*");
 
             // Stock enrichment info (if available)
             if (tx.StockInfo != null)
             {
                 sb.AppendLine($"🏢 {EscapeMarkdown(tx.StockInfo.CompanyName)}");
-                sb.AppendLine($"📂 {EscapeMarkdown(tx.StockInfo.Sector)} | {EscapeMarkdown(tx.StockInfo.Industry)}");
+                sb.AppendLine($"📂 {EscapeMarkdown(tx.StockInfo.Sector)} • {EscapeMarkdown(tx.StockInfo.Industry)}");
+                sb.AppendLine();
             }
 
-            sb.AppendLine($"📈 Type: {tx.Transaction_Type}");
-            sb.AppendLine($"📅 Date: {tx.Date}");
-            sb.AppendLine($"💰 Amount: {tx.Amount}");
+            // Transaction type with descriptive text
+            var transactionTypeText = GetTransactionTypeText(tx.Transaction_Type);
+            sb.AppendLine($"📈 {transactionTypeText}");
+            sb.AppendLine($"📅 {tx.Date}");
+            sb.AppendLine($"💰 {EscapeMarkdown(tx.Amount)}");
             sb.AppendLine();
         }
+
+        sb.AppendLine("━━━━━━━━━━━━━━");
 
         // Investment Vehicles (if any)
         if (transaction.Investment_Vehicles?.Any() == true)
@@ -235,6 +260,62 @@ public class TelegramNotificationService
             "Fund" => "💼",
             "Option" => "📈",
             _ => "❓"
+        };
+    }
+
+    /// <summary>
+    /// Cleans asset name by removing metadata tags like FILING STATUS, SUBHOLDING OF, DESCRIPTION.
+    /// </summary>
+    private string CleanAssetName(string asset)
+    {
+        if (string.IsNullOrEmpty(asset))
+            return asset;
+
+        // Remove metadata tags
+        var cleanedAsset = asset;
+        var metadataTags = new[]
+        {
+            "FILING STATUS: New",
+            "FILING STATUS: Partial",
+            "SUBHOLDING OF:",
+            "DESCRIPTION:"
+        };
+
+        foreach (var tag in metadataTags)
+        {
+            var index = cleanedAsset.IndexOf(tag, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0)
+            {
+                // Find the next newline or end of string after the tag
+                var endIndex = cleanedAsset.IndexOf('\n', index);
+                if (endIndex >= 0)
+                {
+                    cleanedAsset = cleanedAsset.Remove(index, endIndex - index + 1);
+                }
+                else
+                {
+                    cleanedAsset = cleanedAsset.Substring(0, index);
+                }
+            }
+        }
+
+        // Clean up multiple spaces and trim
+        cleanedAsset = System.Text.RegularExpressions.Regex.Replace(cleanedAsset, @"\s+", " ").Trim();
+
+        return cleanedAsset;
+    }
+
+    /// <summary>
+    /// Returns a human-readable description for transaction type codes.
+    /// </summary>
+    private string GetTransactionTypeText(string transactionType)
+    {
+        return transactionType?.ToUpperInvariant() switch
+        {
+            "P" => "Purchase",
+            "S" => "Sale",
+            "E" => "Exchange",
+            _ => transactionType ?? "Unknown"
         };
     }
 

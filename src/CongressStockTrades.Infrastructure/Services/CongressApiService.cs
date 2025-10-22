@@ -89,12 +89,23 @@ public class CongressApiService : ICongressApiService
             if (member == null)
             {
                 var normalizedSearchName = NormalizeName(name);
+                var searchNameParts = normalizedSearchName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
                 member = result.Members.FirstOrDefault(m =>
                 {
                     if (m.Name == null) return false;
                     var normalizedMemberName = NormalizeName(m.Name);
-                    return normalizedMemberName.Contains(normalizedSearchName, StringComparison.OrdinalIgnoreCase) ||
-                           normalizedSearchName.Contains(normalizedMemberName, StringComparison.OrdinalIgnoreCase);
+                    var memberNameParts = normalizedMemberName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                    // Check if any significant name part matches (at least 3 characters to avoid false positives)
+                    var searchSignificantParts = searchNameParts.Where(p => p.Length >= 3).ToList();
+                    var memberSignificantParts = memberNameParts.Where(p => p.Length >= 3).ToList();
+
+                    // Match if at least 2 name parts match (handles different orderings like "Thomas Suozzi" vs "Suozzi Thomas")
+                    var matchCount = searchSignificantParts.Count(sp =>
+                        memberSignificantParts.Any(mp => mp.Equals(sp, StringComparison.OrdinalIgnoreCase)));
+
+                    return matchCount >= 2;
                 });
 
                 if (member != null)
