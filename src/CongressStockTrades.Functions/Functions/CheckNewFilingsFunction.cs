@@ -70,17 +70,8 @@ public class CheckNewFilingsFunction
 
             _logger.LogInformation("Latest filing found: {FilingId} - {Name}", latestFiling.Id, latestFiling.Name);
 
-            // Check if already processed
-            var isProcessed = await _repository.IsFilingProcessedAsync(latestFiling.Id);
-            if (isProcessed)
-            {
-                _logger.LogInformation("Filing {FilingId} already processed, skipping", latestFiling.Id);
-                // await _notificationService.NotifyCheckingStatusAsync("No new filings found.");
-                return;
-            }
-
-            // Queue for processing
-            _logger.LogInformation("New filing detected: {FilingId} - {Name}", latestFiling.Id, latestFiling.Name);
+            // Queue for processing (deduplication handled by ProcessFilingFunction via Cosmos conflict detection)
+            _logger.LogInformation("Queueing filing for processing: {FilingId} - {Name}", latestFiling.Id, latestFiling.Name);
 
             var message = new FilingMessage
             {

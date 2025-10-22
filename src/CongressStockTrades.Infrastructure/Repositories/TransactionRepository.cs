@@ -11,7 +11,6 @@ public class TransactionRepository : ITransactionRepository
     private readonly CosmosClient _cosmosClient;
     private readonly ILogger<TransactionRepository> _logger;
     private readonly Container _transactionsContainer;
-    private readonly Container _processedFilingsContainer;
 
     public TransactionRepository(
         IConfiguration configuration,
@@ -32,7 +31,6 @@ public class TransactionRepository : ITransactionRepository
 
         var database = _cosmosClient.GetDatabase(databaseName);
         _transactionsContainer = database.GetContainer("transactions");
-        _processedFilingsContainer = database.GetContainer("processed-filings");
     }
 
     public async Task<bool> StoreTransactionAsync(TransactionDocument document, CancellationToken cancellationToken = default)
@@ -57,55 +55,6 @@ public class TransactionRepository : ITransactionRepository
         {
             _logger.LogWarning("Transaction for filing {FilingId} already exists", document.FilingId);
             return false; // Already existed
-        }
-    }
-
-    public async Task<bool> IsFilingProcessedAsync(string filingId, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var response = await _processedFilingsContainer.ReadItemAsync<ProcessedFiling>(
-                filingId,
-                new PartitionKey(filingId),
-                cancellationToken: cancellationToken);
-
-            return response.Resource != null;
-        }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return false;
-        }
-    }
-
-    public async Task MarkAsProcessedAsync(
-        string filingId,
-        string pdfUrl,
-        string politician,
-        CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Marking filing {FilingId} as processed", filingId);
-
-        var processedFiling = new ProcessedFiling
-        {
-            Id = filingId,
-            PdfUrl = pdfUrl,
-            Politician = politician,
-            Status = "completed"
-        };
-
-        try
-        {
-            await _processedFilingsContainer.UpsertItemAsync(
-                processedFiling,
-                new PartitionKey(filingId),
-                cancellationToken: cancellationToken);
-
-            _logger.LogInformation("Successfully marked filing {FilingId} as processed", filingId);
-        }
-        catch (CosmosException ex)
-        {
-            _logger.LogError(ex, "Failed to mark filing {FilingId} as processed", filingId);
-            throw;
         }
     }
 

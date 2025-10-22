@@ -66,14 +66,6 @@ public class ProcessFilingFunction
                 message.Name,
                 message.Office);
 
-            // Check if already processed (deduplication)
-            var isProcessed = await _repository.IsFilingProcessedAsync(message.FilingId);
-            if (isProcessed)
-            {
-                _logger.LogWarning("Filing {FilingId} already processed, skipping", message.FilingId);
-                return;
-            }
-
             // Process PDF
             var transactionDocument = await _pdfProcessor.ProcessPdfAsync(
                 message.PdfUrl,
@@ -84,33 +76,26 @@ public class ProcessFilingFunction
             // Validate extracted data
             _validator.Validate(transactionDocument, message.Name, message.Office);
 
-            // Store in Cosmos DB
+            // Store in Cosmos DB (returns false if already exists - deduplication)
             var wasStored = await _repository.StoreTransactionAsync(transactionDocument);
 
-            // Mark as processed
-            await _repository.MarkAsProcessedAsync(
-                message.FilingId,
-                message.PdfUrl,
-                message.Name);
+            if (!wasStored)
+            {
+                _logger.LogInformation("Filing {FilingId} already exists, skipping notifications", message.FilingId);
+                return;
+            }
 
             _logger.LogInformation(
                 "Successfully processed filing {FilingId} with {Count} transactions",
                 message.FilingId,
                 transactionDocument.Transactions.Count);
 
-            // Only send notifications if this instance was the first to store it (prevents duplicates)
-            if (wasStored)
-            {
-                // Broadcast to connected clients via SignalR
-                await _notificationService.BroadcastNewTransactionAsync(transactionDocument);
+            // Send notifications (only if newly stored)
+            // Broadcast to connected clients via SignalR
+            await _notificationService.BroadcastNewTransactionAsync(transactionDocument);
 
-                // Send Telegram notification
-                await _telegramService.SendTransactionNotificationAsync(transactionDocument);
-            }
-            else
-            {
-                _logger.LogInformation("Filing {FilingId} already exists, notifications skipped to prevent duplicates", message.FilingId);
-            }
+            // Send Telegram notification
+            await _telegramService.SendTransactionNotificationAsync(transactionDocument);
         }
         catch (ValidationException ex)
         {

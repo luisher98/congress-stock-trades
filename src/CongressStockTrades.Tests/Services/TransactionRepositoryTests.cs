@@ -72,9 +72,7 @@ public class TransactionRepositoryTests
     // 2. Test data seeding
     // 3. Verification of:
     //    - Document creation with correct partition keys (StoreTransactionAsync)
-    //    - Checking if filing is processed (IsFilingProcessedAsync)
-    //    - Marking filing as processed (MarkAsProcessedAsync)
     //    - Query results ordering and filtering (GetLatestTransactionAsync)
     //    - Error handling for network/service failures
-    //    - Duplicate filing detection (409 Conflict handling)
+    //    - Duplicate filing detection (409 Conflict handling via StoreTransactionAsync)
 }
