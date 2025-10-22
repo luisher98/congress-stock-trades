@@ -14,6 +14,7 @@ A cloud-native application that automatically detects, processes, and serves Per
 
 - **Automated Monitoring**: Checks House.gov every 5 minutes for new PTR filings
 - **AI-Powered Extraction**: Azure Document Intelligence extracts structured data from PDF forms
+- **Committee Enrichment**: Automatically fetches committee memberships from Congress.gov API
 - **Real-Time Notifications**: SignalR pushes updates to connected clients instantly
 - **REST API**: Query latest transaction data via HTTP endpoints
 - **Serverless Architecture**: Auto-scaling Azure Functions with pay-per-execution pricing
@@ -112,7 +113,12 @@ cd congress-stock-trades
 dotnet restore src/CongressStockTrades.sln
 ```
 
-### 3. Configure Local Settings
+### 3. Get Congress.gov API Key
+Sign up for a free API key at [https://api.congress.gov/sign-up/](https://api.congress.gov/sign-up/)
+- Free tier includes 5,000 requests per hour
+- Used to fetch committee membership information for members
+
+### 4. Configure Local Settings
 Create `src/CongressStockTrades.Functions/local.settings.json`:
 
 ```json
@@ -126,12 +132,13 @@ Create `src/CongressStockTrades.Functions/local.settings.json`:
     "CosmosDb__DatabaseName": "CongressTrades",
     "DocumentIntelligence__Endpoint": "https://your-docintel.cognitiveservices.azure.com/",
     "DocumentIntelligence__Key": "your-doc-intel-key",
-    "SignalR__ConnectionString": "Endpoint=https://your-signalr.service.signalr.net;AccessKey=xxx"
+    "SignalR__ConnectionString": "Endpoint=https://your-signalr.service.signalr.net;AccessKey=xxx",
+    "CongressApi__ApiKey": "your-congress-api-key-from-api-congress-gov"
   }
 }
 ```
 
-### 4. Run Locally
+### 5. Run Locally
 ```bash
 # Start Azurite (Storage Emulator)
 azurite --silent &
@@ -143,7 +150,7 @@ cd src/CongressStockTrades.Functions
 func start
 ```
 
-### 5. Test Endpoints
+### 6. Test Endpoints
 ```bash
 # Health check
 curl http://localhost:7071/api/health
@@ -187,11 +194,19 @@ GET /api/latest
   "Filing_Information": {
     "Name": "Doe, John",
     "Status": "Filed",
-    "State_District": "CA12"
+    "State_District": "CA12",
+    "Committees": [
+      {
+        "CommitteeCode": "HSBA",
+        "CommitteeName": "Committee on Financial Services",
+        "Chamber": "House",
+        "Role": "Member",
+        "Rank": 5
+      }
+    ]
   },
   "Transactions": [
     {
-      "ID_Owner": "Self",
       "Asset": "Apple Inc (AAPL)",
       "Transaction_Type": "Purchase",
       "Date": "2025-01-15",

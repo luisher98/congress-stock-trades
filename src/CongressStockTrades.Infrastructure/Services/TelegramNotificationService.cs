@@ -113,6 +113,25 @@ public class TelegramNotificationService
             sb.AppendLine("💎 *IPO Transaction*");
         }
 
+        // Committee Memberships
+        if (transaction.Filing_Information.Committees?.Any() == true)
+        {
+            var keyCommittees = transaction.Filing_Information.Committees
+                .Where(c => IsFinanciallyRelevantCommittee(c.CommitteeCode))
+                .ToList();
+
+            if (keyCommittees.Any())
+            {
+                sb.AppendLine();
+                sb.AppendLine("⚠️ *Key Committee Memberships:*");
+                foreach (var committee in keyCommittees)
+                {
+                    var role = !string.IsNullOrEmpty(committee.Role) ? $" ({committee.Role})" : "";
+                    sb.AppendLine($"  • {EscapeMarkdown(committee.CommitteeName)}{role}");
+                }
+            }
+        }
+
         sb.AppendLine();
 
         // Transactions
@@ -166,6 +185,30 @@ public class TelegramNotificationService
             _logger.LogError("Telegram API error: {StatusCode} - {Error}", response.StatusCode, error);
             throw new HttpRequestException($"Telegram API returned {response.StatusCode}");
         }
+    }
+
+    /// <summary>
+    /// Identifies committees that are particularly relevant for financial oversight and policy.
+    /// </summary>
+    private bool IsFinanciallyRelevantCommittee(string committeeCode)
+    {
+        // Key committees that oversee financial markets, banking, and related policy
+        var relevantCodes = new[]
+        {
+            "HSBA", // House Financial Services
+            "SSFI", // Senate Finance
+            "SSBK", // Senate Banking, Housing, and Urban Affairs
+            "HSWM", // House Ways and Means
+            "HSIF", // House Energy and Commerce
+            "SSEG", // Senate Energy and Natural Resources
+            "SSCM", // Senate Commerce, Science, and Transportation
+            "HSAP", // House Appropriations
+            "SSAP", // Senate Appropriations
+            "HSBG", // House Budget
+            "SSBG"  // Senate Budget
+        };
+
+        return relevantCodes.Any(code => committeeCode.Contains(code, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

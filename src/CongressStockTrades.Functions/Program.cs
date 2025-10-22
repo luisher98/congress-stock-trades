@@ -36,6 +36,12 @@ var host = new HostBuilder()
         // Register HttpClient for PdfProcessor
         services.AddHttpClient();
 
+        // Register memory cache for CongressApiService
+        services.AddMemoryCache();
+
+        // Register HttpClient for CongressApiService
+        services.AddHttpClient<ICongressApiService, CongressApiService>();
+
         // SignalR Service
         services.AddSingleton<ServiceHubContext>(sp =>
         {

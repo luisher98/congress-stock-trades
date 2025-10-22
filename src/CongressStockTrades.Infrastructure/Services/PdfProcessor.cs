@@ -11,17 +11,20 @@ public class PdfProcessor : IPdfProcessor
 {
     private readonly HttpClient _httpClient;
     private readonly DocumentAnalysisClient _docIntelClient;
+    private readonly ICongressApiService _congressApi;
     private readonly ILogger<PdfProcessor> _logger;
     private readonly string _modelId;
 
     public PdfProcessor(
         HttpClient httpClient,
         DocumentAnalysisClient docIntelClient,
+        ICongressApiService congressApi,
         IConfiguration configuration,
         ILogger<PdfProcessor> logger)
     {
         _httpClient = httpClient;
         _docIntelClient = docIntelClient;
+        _congressApi = congressApi;
         _logger = logger;
 
         _modelId = Environment.GetEnvironmentVariable("DocumentIntelligence__ModelId")
@@ -59,6 +62,9 @@ public class PdfProcessor : IPdfProcessor
 
         // Extract filing information
         var filingInfo = ExtractFilingInformation(result);
+
+        // Lookup committee memberships from Congress.gov API
+        await EnrichWithCommitteeInfoAsync(filingInfo, cancellationToken);
 
         // Extract transactions from tables
         var transactions = ExtractTransactions(result);
@@ -228,5 +234,47 @@ public class PdfProcessor : IPdfProcessor
 
         _logger.LogInformation("Extracted {Count} transactions from custom model", transactions.Count);
         return transactions;
+    }
+
+    private async Task EnrichWithCommitteeInfoAsync(FilingInformation filingInfo, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filingInfo.Name) || filingInfo.Name == "Unknown")
+            {
+                _logger.LogDebug("Skipping committee lookup - no valid member name");
+                return;
+            }
+
+            _logger.LogInformation("Looking up committees for {Name}", filingInfo.Name);
+
+            // Get bioguide ID from name
+            var bioguideId = await _congressApi.GetBioguideIdByNameAsync(filingInfo.Name, cancellationToken);
+
+            if (string.IsNullOrEmpty(bioguideId))
+            {
+                _logger.LogWarning("Could not find bioguide ID for {Name}", filingInfo.Name);
+                return;
+            }
+
+            // Get committee memberships
+            var committees = await _congressApi.GetMemberCommitteesAsync(bioguideId, null, cancellationToken);
+
+            if (committees.Any())
+            {
+                filingInfo.Committees = committees;
+                _logger.LogInformation("Found {Count} committee memberships for {Name}",
+                    committees.Count, filingInfo.Name);
+            }
+            else
+            {
+                _logger.LogInformation("No committees found for {Name}", filingInfo.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Don't fail the whole processing if committee lookup fails
+            _logger.LogError(ex, "Error enriching with committee info for {Name}", filingInfo.Name);
+        }
     }
 }

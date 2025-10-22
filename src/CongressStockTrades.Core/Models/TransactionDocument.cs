@@ -88,6 +88,12 @@ public class FilingInformation
     /// Example: "CA12"
     /// </summary>
     public required string State_District { get; set; }
+
+    /// <summary>
+    /// List of committee memberships for this member (optional).
+    /// Populated from Congress.gov API if available.
+    /// </summary>
+    public List<CommitteeMembership>? Committees { get; set; }
 }
 
 /// <summary>
