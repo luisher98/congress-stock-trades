@@ -57,7 +57,6 @@ public class SignalRNotificationServiceTests
                 new Transaction
                 {
                     Date = "2025-01-15",
-                    ID_Owner = "Self",
                     Asset = "Apple Inc. - Common Stock",
                     Transaction_Type = "Purchase",
                     Amount = "$1,001 - $15,000"

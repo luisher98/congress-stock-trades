@@ -37,10 +37,27 @@ public class TransactionDocument
     public DateTime ProcessedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
+    /// Filing date from the PDF.
+    /// Example: "2025-01-06"
+    /// </summary>
+    public string? Filing_Date { get; set; }
+
+    /// <summary>
+    /// Whether this filing is for an Initial Public Offering.
+    /// </summary>
+    public bool IsIPO { get; set; }
+
+    /// <summary>
     /// Filing metadata extracted from the PDF header.
     /// Contains politician name, filing status, and district information.
     /// </summary>
     public required FilingInformation Filing_Information { get; set; }
+
+    /// <summary>
+    /// List of investment vehicles (optional).
+    /// Example: "Real estate investments (Owner: JT)"
+    /// </summary>
+    public List<string>? Investment_Vehicles { get; set; }
 
     /// <summary>
     /// List of stock transactions extracted from the PDF tables.
@@ -78,11 +95,6 @@ public class FilingInformation
 /// </summary>
 public class Transaction
 {
-    /// <summary>
-    /// Owner of the asset (Self, Spouse, Joint, Dependent Child).
-    /// </summary>
-    public required string ID_Owner { get; set; }
-
     /// <summary>
     /// Description of the asset being traded.
     /// Example: "Apple Inc. - Common Stock"

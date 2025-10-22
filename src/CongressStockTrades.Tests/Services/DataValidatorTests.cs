@@ -148,7 +148,6 @@ public class DataValidatorTests
             {
                 new Transaction
                 {
-                    ID_Owner = "Self",
                     Asset = "Apple Inc. - Common Stock",
                     Transaction_Type = "Purchase",
                     Date = "2025-01-15",

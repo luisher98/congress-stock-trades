@@ -65,12 +65,53 @@ public class PdfProcessor : IPdfProcessor
 
         _logger.LogInformation("Extracted {Count} transactions from PDF", transactions.Count);
 
+        // Extract additional fields from document
+        var document = result.Documents.FirstOrDefault();
+
+        // Extract filing date
+        string? filingDate = null;
+        if (document?.Fields.TryGetValue("filing_date", out var filingDateField) == true)
+        {
+            filingDate = filingDateField.Content?.Trim();
+        }
+
+        // Extract IPO status (true if ipo_true is selected, false otherwise)
+        bool isIPO = false;
+        if (document?.Fields.TryGetValue("ipo_true", out var ipoTrueField) == true &&
+            ipoTrueField.FieldType == DocumentFieldType.SelectionMark)
+        {
+            isIPO = ipoTrueField.Value.AsSelectionMarkState() == DocumentSelectionMarkState.Selected;
+        }
+
+        // Extract investment vehicles
+        List<string>? investmentVehicles = null;
+        if (document?.Fields.TryGetValue("investment_vehicle", out var investmentVehicleField) == true &&
+            investmentVehicleField.FieldType == DocumentFieldType.List)
+        {
+            investmentVehicles = new List<string>();
+            var vehicleList = investmentVehicleField.Value.AsList();
+            foreach (var vehicle in vehicleList)
+            {
+                if (vehicle.FieldType == DocumentFieldType.Dictionary)
+                {
+                    var vehicleDict = vehicle.Value.AsDictionary();
+                    if (vehicleDict.TryGetValue("type", out var typeField))
+                    {
+                        investmentVehicles.Add(typeField.Content?.Trim() ?? "");
+                    }
+                }
+            }
+        }
+
         return new TransactionDocument
         {
             Id = filingId, // Use FilingId as the Cosmos DB document id
             FilingId = filingId,
             PdfUrl = pdfUrl,
+            Filing_Date = filingDate,
+            IsIPO = isIPO,
             Filing_Information = filingInfo,
+            Investment_Vehicles = investmentVehicles,
             Transactions = transactions
         };
     }
@@ -167,8 +208,7 @@ public class PdfProcessor : IPdfProcessor
                         Asset = fields.TryGetValue("Asset", out var asset) ? asset.Content?.Trim() ?? "" : "",
                         Transaction_Type = fields.TryGetValue("Transaction Type", out var type) ? type.Content?.Trim() ?? "" : "",
                         Date = fields.TryGetValue("Date", out var date) ? date.Content?.Trim() ?? "" : "",
-                        Amount = fields.TryGetValue("Amount", out var amount) ? amount.Content?.Trim() ?? "" : "",
-                        ID_Owner = fields.TryGetValue("Owner", out var owner) ? owner.Content?.Trim() ?? "" : ""
+                        Amount = fields.TryGetValue("Amount", out var amount) ? amount.Content?.Trim() ?? "" : ""
                     });
                 }
             }
