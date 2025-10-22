@@ -42,6 +42,12 @@ var host = new HostBuilder()
         // Register HttpClient for CongressApiService
         services.AddHttpClient<ICongressApiService, CongressApiService>();
 
+        // Register Asset Parser (singleton - stateless)
+        services.AddSingleton<IAssetParser, AssetParser>();
+
+        // Register HttpClient for StockDataService
+        services.AddHttpClient<IStockDataService, StockDataService>();
+
         // SignalR Service
         services.AddSingleton<ServiceHubContext>(sp =>
         {

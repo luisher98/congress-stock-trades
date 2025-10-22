@@ -141,7 +141,18 @@ public class TelegramNotificationService
         foreach (var (tx, index) in transaction.Transactions.Select((t, i) => (t, i + 1)))
         {
             sb.AppendLine($"*Transaction {index}:*");
-            sb.AppendLine($"🏢 Asset: {EscapeMarkdown(tx.Asset)}");
+
+            // Asset type badge
+            var assetTypeBadge = GetAssetTypeBadge(tx.AssetType);
+            sb.AppendLine($"{assetTypeBadge} Asset: {EscapeMarkdown(tx.Asset)}");
+
+            // Stock enrichment info (if available)
+            if (tx.StockInfo != null)
+            {
+                sb.AppendLine($"🏢 {EscapeMarkdown(tx.StockInfo.CompanyName)}");
+                sb.AppendLine($"📂 {EscapeMarkdown(tx.StockInfo.Sector)} | {EscapeMarkdown(tx.StockInfo.Industry)}");
+            }
+
             sb.AppendLine($"📈 Type: {tx.Transaction_Type}");
             sb.AppendLine($"📅 Date: {tx.Date}");
             sb.AppendLine($"💰 Amount: {tx.Amount}");
@@ -209,6 +220,22 @@ public class TelegramNotificationService
         };
 
         return relevantCodes.Any(code => committeeCode.Contains(code, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Returns an emoji badge for the asset type.
+    /// </summary>
+    private string GetAssetTypeBadge(string? assetType)
+    {
+        return assetType switch
+        {
+            "Stock" => "📊",
+            "Bond" => "📜",
+            "Crypto" => "🪙",
+            "Fund" => "💼",
+            "Option" => "📈",
+            _ => "❓"
+        };
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using Azure;
 using Azure.AI.FormRecognizer.DocumentAnalysis;
 using Azure.Core;
+using CongressStockTrades.Core.Models;
 using CongressStockTrades.Core.Services;
 using CongressStockTrades.Infrastructure.Services;
 using FluentAssertions;
@@ -15,6 +16,8 @@ public class PdfProcessorTests
     private readonly Mock<HttpClient> _httpClientMock;
     private readonly Mock<DocumentAnalysisClient> _docIntelClientMock;
     private readonly Mock<ICongressApiService> _congressApiMock;
+    private readonly Mock<IAssetParser> _assetParserMock;
+    private readonly Mock<IStockDataService> _stockDataServiceMock;
     private readonly Mock<IConfiguration> _configurationMock;
     private readonly Mock<ILogger<PdfProcessor>> _loggerMock;
 
@@ -23,12 +26,22 @@ public class PdfProcessorTests
         _httpClientMock = new Mock<HttpClient>();
         _docIntelClientMock = new Mock<DocumentAnalysisClient>();
         _congressApiMock = new Mock<ICongressApiService>();
+        _assetParserMock = new Mock<IAssetParser>();
+        _stockDataServiceMock = new Mock<IStockDataService>();
         _configurationMock = new Mock<IConfiguration>();
         _loggerMock = new Mock<ILogger<PdfProcessor>>();
 
         // Setup configuration to return a model ID
         _configurationMock.Setup(c => c["DocumentIntelligence__ModelId"])
             .Returns("ptr-extractor-v1");
+
+        // Setup default mock behaviors for new services
+        _assetParserMock.Setup(p => p.ExtractAssetType(It.IsAny<string>()))
+            .Returns("Unknown");
+        _assetParserMock.Setup(p => p.ExtractTicker(It.IsAny<string>()))
+            .Returns((string?)null);
+        _stockDataServiceMock.Setup(s => s.GetStockInfoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((StockInfo?)null);
     }
 
     [Fact]
@@ -39,6 +52,8 @@ public class PdfProcessorTests
             new HttpClient(),
             Mock.Of<DocumentAnalysisClient>(),
             _congressApiMock.Object,
+            _assetParserMock.Object,
+            _stockDataServiceMock.Object,
             _configurationMock.Object,
             _loggerMock.Object
         );
@@ -55,6 +70,8 @@ public class PdfProcessorTests
             new HttpClient(),
             Mock.Of<DocumentAnalysisClient>(),
             _congressApiMock.Object,
+            _assetParserMock.Object,
+            _stockDataServiceMock.Object,
             _configurationMock.Object,
             _loggerMock.Object
         );
@@ -79,6 +96,8 @@ public class PdfProcessorTests
             new HttpClient(),
             Mock.Of<DocumentAnalysisClient>(),
             _congressApiMock.Object,
+            _assetParserMock.Object,
+            _stockDataServiceMock.Object,
             _configurationMock.Object,
             _loggerMock.Object
         );

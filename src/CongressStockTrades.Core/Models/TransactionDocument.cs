@@ -103,9 +103,24 @@ public class Transaction
 {
     /// <summary>
     /// Description of the asset being traded.
-    /// Example: "Apple Inc. - Common Stock"
+    /// Example: "Apple Inc. - Common Stock (AAPL) [ST]"
+    /// Note: This is the full asset string as extracted from the PDF, including tickers and tags.
     /// </summary>
     public required string Asset { get; set; }
+
+    /// <summary>
+    /// Type of asset based on bracket tag from PDF.
+    /// Examples: "Stock", "Bond", "Crypto", "Fund", "Option", "Unknown"
+    /// Derived from tags like [ST], [GS], [CR], [MF], [OP]
+    /// </summary>
+    public string? AssetType { get; set; }
+
+    /// <summary>
+    /// Enriched stock information (sector, industry, etc.) from Financial Modeling Prep API.
+    /// Only populated for stocks ([ST]) with valid ticker symbols.
+    /// Null for bonds, crypto, funds, or when enrichment fails.
+    /// </summary>
+    public StockInfo? StockInfo { get; set; }
 
     /// <summary>
     /// Type of transaction (Purchase, Sale, Exchange).

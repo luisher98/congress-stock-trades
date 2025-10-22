@@ -12,6 +12,8 @@ public class PdfProcessor : IPdfProcessor
     private readonly HttpClient _httpClient;
     private readonly DocumentAnalysisClient _docIntelClient;
     private readonly ICongressApiService _congressApi;
+    private readonly IAssetParser _assetParser;
+    private readonly IStockDataService _stockDataService;
     private readonly ILogger<PdfProcessor> _logger;
     private readonly string _modelId;
 
@@ -19,12 +21,16 @@ public class PdfProcessor : IPdfProcessor
         HttpClient httpClient,
         DocumentAnalysisClient docIntelClient,
         ICongressApiService congressApi,
+        IAssetParser assetParser,
+        IStockDataService stockDataService,
         IConfiguration configuration,
         ILogger<PdfProcessor> logger)
     {
         _httpClient = httpClient;
         _docIntelClient = docIntelClient;
         _congressApi = congressApi;
+        _assetParser = assetParser;
+        _stockDataService = stockDataService;
         _logger = logger;
 
         _modelId = Environment.GetEnvironmentVariable("DocumentIntelligence__ModelId")
@@ -70,6 +76,9 @@ public class PdfProcessor : IPdfProcessor
         var transactions = ExtractTransactions(result);
 
         _logger.LogInformation("Extracted {Count} transactions from PDF", transactions.Count);
+
+        // Enrich transactions with asset type and stock data
+        await EnrichTransactionsWithStockDataAsync(transactions, cancellationToken);
 
         // Validate that we got meaningful data from the model
         if (transactions.Count == 0)
@@ -275,6 +284,55 @@ public class PdfProcessor : IPdfProcessor
         {
             // Don't fail the whole processing if committee lookup fails
             _logger.LogError(ex, "Error enriching with committee info for {Name}", filingInfo.Name);
+        }
+    }
+
+    private async Task EnrichTransactionsWithStockDataAsync(List<Transaction> transactions, CancellationToken cancellationToken)
+    {
+        var enrichedCount = 0;
+        var stockCount = 0;
+
+        try
+        {
+            foreach (var transaction in transactions)
+            {
+                // Extract asset type from bracket tag
+                transaction.AssetType = _assetParser.ExtractAssetType(transaction.Asset);
+
+                // Only enrich stocks
+                if (transaction.AssetType == "Stock")
+                {
+                    stockCount++;
+
+                    // Extract ticker symbol
+                    var ticker = _assetParser.ExtractTicker(transaction.Asset);
+
+                    if (!string.IsNullOrEmpty(ticker))
+                    {
+                        // Fetch stock info from FMP API (with caching)
+                        transaction.StockInfo = await _stockDataService.GetStockInfoAsync(ticker, cancellationToken);
+
+                        if (transaction.StockInfo != null)
+                        {
+                            enrichedCount++;
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogDebug("No ticker found for stock asset: {Asset}", transaction.Asset);
+                    }
+                }
+            }
+
+            _logger.LogInformation(
+                "Stock enrichment: {EnrichedCount}/{StockCount} stocks enriched ({TotalCount} total transactions, {AssetTypes})",
+                enrichedCount, stockCount, transactions.Count,
+                string.Join(", ", transactions.GroupBy(t => t.AssetType).Select(g => $"{g.Key}: {g.Count()}")));
+        }
+        catch (Exception ex)
+        {
+            // Don't fail the whole processing if stock enrichment fails
+            _logger.LogError(ex, "Error enriching transactions with stock data");
         }
     }
 }
