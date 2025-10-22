@@ -84,7 +84,7 @@ public class ProcessFilingFunction
             // Validate extracted data
             _validator.Validate(transactionDocument, message.Name, message.Office);
 
-            // Store in Cosmos DB (this will return false if already exists due to duplicate processing)
+            // Store in Cosmos DB
             var wasStored = await _repository.StoreTransactionAsync(transactionDocument);
 
             // Mark as processed
@@ -93,15 +93,14 @@ public class ProcessFilingFunction
                 message.PdfUrl,
                 message.Name);
 
-            // Only send notifications if this was the first instance to store it
-            // This prevents duplicate notifications when multiple instances process the same filing
+            _logger.LogInformation(
+                "Successfully processed filing {FilingId} with {Count} transactions",
+                message.FilingId,
+                transactionDocument.Transactions.Count);
+
+            // Only send notifications if this instance was the first to store it (prevents duplicates)
             if (wasStored)
             {
-                _logger.LogInformation(
-                    "Successfully processed filing {FilingId} with {Count} transactions",
-                    message.FilingId,
-                    transactionDocument.Transactions.Count);
-
                 // Broadcast to connected clients via SignalR
                 await _notificationService.BroadcastNewTransactionAsync(transactionDocument);
 
@@ -110,9 +109,7 @@ public class ProcessFilingFunction
             }
             else
             {
-                _logger.LogInformation(
-                    "Filing {FilingId} was already stored by another instance, skipping notifications",
-                    message.FilingId);
+                _logger.LogInformation("Filing {FilingId} already exists, notifications skipped to prevent duplicates", message.FilingId);
             }
         }
         catch (ValidationException ex)
