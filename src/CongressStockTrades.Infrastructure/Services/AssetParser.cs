@@ -55,4 +55,31 @@ public class AssetParser : IAssetParser
         var tag = match.Groups[1].Value;
         return BracketTagMap.TryGetValue(tag, out var assetType) ? assetType : tag;
     }
+
+    /// <summary>
+    /// Cleans an asset string by removing metadata tags and extracting the company name.
+    /// </summary>
+    public string CleanAssetName(string asset)
+    {
+        if (string.IsNullOrWhiteSpace(asset))
+            return string.Empty;
+
+        var cleaned = asset;
+
+        // Remove ticker in parentheses: (AAPL), (BRK.B)
+        cleaned = TickerRegex.Replace(cleaned, "");
+
+        // Remove bracket tags: [ST], [GS], [CR]
+        cleaned = BracketTagRegex.Replace(cleaned, "");
+
+        // Remove common metadata patterns
+        cleaned = Regex.Replace(cleaned, @"FILING STATUS:[^,\n]*", "", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"SUBHOLDING OF:[^,\n]*", "", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"DESCRIPTION:[^,\n]*", "", RegexOptions.IgnoreCase);
+
+        // Remove extra whitespace and trim
+        cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+
+        return cleaned;
+    }
 }

@@ -40,8 +40,12 @@ public class PdfProcessorTests
             .Returns("Unknown");
         _assetParserMock.Setup(p => p.ExtractTicker(It.IsAny<string>()))
             .Returns((string?)null);
+        _assetParserMock.Setup(p => p.CleanAssetName(It.IsAny<string>()))
+            .Returns((string s) => s);
         _stockDataServiceMock.Setup(s => s.GetStockInfoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((StockInfo?)null);
+        _stockDataServiceMock.Setup(s => s.SearchTickerByNameAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
     }
 
     [Fact]

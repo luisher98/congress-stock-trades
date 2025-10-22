@@ -111,6 +111,57 @@ public class StockDataService : IStockDataService
         }
     }
 
+    /// <summary>
+    /// Searches for a ticker symbol by company name using FMP search API.
+    /// </summary>
+    public async Task<string?> SearchTickerByNameAsync(string companyName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(companyName))
+            return null;
+
+        try
+        {
+            _logger.LogInformation("Searching for ticker with company name: {CompanyName}", companyName);
+
+            var url = $"{BaseUrl}/search?query={Uri.EscapeDataString(companyName)}&limit=5&apikey={_apiKey}";
+            var response = await _httpClient.GetAsync(url, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("FMP search API returned {StatusCode} for query {CompanyName}", response.StatusCode, companyName);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            var results = JsonSerializer.Deserialize<List<FmpSearchResult>>(json);
+
+            if (results == null || results.Count == 0)
+            {
+                _logger.LogInformation("No search results found for company name: {CompanyName}", companyName);
+                return null;
+            }
+
+            // Take the first result (best match)
+            var bestMatch = results[0];
+
+            if (string.IsNullOrWhiteSpace(bestMatch.Symbol))
+            {
+                _logger.LogWarning("Search result has no symbol for company name: {CompanyName}", companyName);
+                return null;
+            }
+
+            _logger.LogInformation("Found ticker {Ticker} for company name {CompanyName} (exchange: {Exchange})",
+                bestMatch.Symbol, companyName, bestMatch.StockExchange);
+
+            return bestMatch.Symbol;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching for ticker by company name: {CompanyName}", companyName);
+            return null;
+        }
+    }
+
     #region FMP API Response Models
 
     private class FmpCompanyProfile
@@ -126,6 +177,24 @@ public class StockDataService : IStockDataService
 
         [JsonPropertyName("industry")]
         public string? Industry { get; set; }
+    }
+
+    private class FmpSearchResult
+    {
+        [JsonPropertyName("symbol")]
+        public string? Symbol { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("currency")]
+        public string? Currency { get; set; }
+
+        [JsonPropertyName("stockExchange")]
+        public string? StockExchange { get; set; }
+
+        [JsonPropertyName("exchangeShortName")]
+        public string? ExchangeShortName { get; set; }
     }
 
     #endregion

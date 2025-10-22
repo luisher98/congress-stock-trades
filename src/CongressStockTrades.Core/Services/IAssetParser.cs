@@ -28,4 +28,13 @@ public interface IAssetParser
     /// <param name="asset">Full asset string from PDF</param>
     /// <returns>Asset type classification</returns>
     string ExtractAssetType(string asset);
+
+    /// <summary>
+    /// Cleans an asset string by removing metadata tags and extracting the company name.
+    /// Removes: bracket tags [ST], parentheses with tickers (AAPL), metadata like "FILING STATUS:", etc.
+    /// Example: "Apple Inc (AAPL) [ST] FILING STATUS: New" → "Apple Inc"
+    /// </summary>
+    /// <param name="asset">Full asset string from PDF</param>
+    /// <returns>Cleaned company name suitable for searching</returns>
+    string CleanAssetName(string asset);
 }

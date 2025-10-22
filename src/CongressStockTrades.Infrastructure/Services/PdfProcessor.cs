@@ -307,19 +307,32 @@ public class PdfProcessor : IPdfProcessor
                     // Extract ticker symbol
                     var ticker = _assetParser.ExtractTicker(transaction.Asset);
 
+                    // If no ticker found, try searching by company name
+                    if (string.IsNullOrEmpty(ticker))
+                    {
+                        _logger.LogDebug("No ticker found for stock asset: {Asset}, attempting search by name", transaction.Asset);
+
+                        var cleanedName = _assetParser.CleanAssetName(transaction.Asset);
+                        if (!string.IsNullOrWhiteSpace(cleanedName))
+                        {
+                            ticker = await _stockDataService.SearchTickerByNameAsync(cleanedName, cancellationToken);
+
+                            if (string.IsNullOrEmpty(ticker))
+                            {
+                                _logger.LogDebug("Search failed to find ticker for: {CleanedName}", cleanedName);
+                            }
+                        }
+                    }
+
+                    // Fetch stock info if we have a ticker (either extracted or searched)
                     if (!string.IsNullOrEmpty(ticker))
                     {
-                        // Fetch stock info from FMP API (with caching)
                         transaction.StockInfo = await _stockDataService.GetStockInfoAsync(ticker, cancellationToken);
 
                         if (transaction.StockInfo != null)
                         {
                             enrichedCount++;
                         }
-                    }
-                    else
-                    {
-                        _logger.LogDebug("No ticker found for stock asset: {Asset}", transaction.Asset);
                     }
                 }
             }
