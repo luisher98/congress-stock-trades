@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using YamlDotNet.Serialization;
 
 namespace CongressStockTrades.Infrastructure.Services;
 
@@ -128,8 +129,7 @@ public class CongressApiService : ICongressApiService
         if (string.IsNullOrWhiteSpace(bioguideId))
             return new List<CommitteeMembership>();
 
-        var congressNum = congress ?? _currentCongress;
-        var cacheKey = $"committees_{bioguideId}_{congressNum}";
+        var cacheKey = $"committees_{bioguideId}";
 
         if (_cache.TryGetValue<List<CommitteeMembership>>(cacheKey, out var cached))
         {
@@ -139,47 +139,20 @@ public class CongressApiService : ICongressApiService
 
         try
         {
-            _logger.LogInformation("Fetching committees for member {BioguideId} in {Congress}th Congress",
-                bioguideId, congressNum);
+            _logger.LogInformation("Fetching committees for member {BioguideId} from unitedstates/congress-legislators", bioguideId);
 
-            var committees = new List<CommitteeMembership>();
+            // Use the unitedstates/congress-legislators data source (more reliable than Congress.gov API)
+            var url = "https://theunitedstates.io/congress-legislators/committee-membership-current.yaml";
+            var response = await _httpClient.GetAsync(url, cancellationToken);
 
-            // Fetch committees for both House and Senate (member might have served in both)
-            foreach (var chamber in new[] { "house", "senate" })
+            if (!response.IsSuccessStatusCode)
             {
-                var url = $"{BaseUrl}/committee/{congressNum}/{chamber}?limit=250&api_key={_apiKey}";
-                var response = await _httpClient.GetAsync(url, cancellationToken);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogWarning("Failed to fetch {Chamber} committees: {StatusCode}",
-                        chamber, response.StatusCode);
-                    continue;
-                }
-
-                var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var result = JsonSerializer.Deserialize<CommitteeListResponse>(json);
-
-                if (result?.Committees == null)
-                    continue;
-
-                // For each committee, check if the member is on it
-                foreach (var committee in result.Committees)
-                {
-                    if (string.IsNullOrEmpty(committee.SystemCode))
-                        continue;
-
-                    var membership = await GetMembershipInCommitteeAsync(
-                        congressNum, chamber, committee.SystemCode, bioguideId, cancellationToken);
-
-                    if (membership != null)
-                    {
-                        membership.CommitteeName = committee.Name ?? "Unknown Committee";
-                        membership.Chamber = char.ToUpper(chamber[0]) + chamber.Substring(1);
-                        committees.Add(membership);
-                    }
-                }
+                _logger.LogWarning("Failed to fetch committee data: {StatusCode}", response.StatusCode);
+                return new List<CommitteeMembership>();
             }
+
+            var yaml = await response.Content.ReadAsStringAsync(cancellationToken);
+            var committees = ParseCommitteeMemberships(yaml, bioguideId);
 
             _cache.Set(cacheKey, committees, CacheDuration);
             _logger.LogInformation("Found {Count} committees for {BioguideId}", committees.Count, bioguideId);
@@ -189,50 +162,6 @@ public class CongressApiService : ICongressApiService
         {
             _logger.LogError(ex, "Error fetching committees for {BioguideId}", bioguideId);
             return new List<CommitteeMembership>();
-        }
-    }
-
-    private async Task<CommitteeMembership?> GetMembershipInCommitteeAsync(
-        int congress,
-        string chamber,
-        string committeeCode,
-        string bioguideId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            // Extract the base committee code without chamber prefix
-            var cleanCode = committeeCode.Replace("HS", "").Replace("SS", "").Replace("JS", "");
-
-            var url = $"{BaseUrl}/committee/{congress}/{chamber}/{cleanCode}?api_key={_apiKey}";
-            var response = await _httpClient.GetAsync(url, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-                return null;
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            var result = JsonSerializer.Deserialize<CommitteeDetailResponse>(json);
-
-            // Check if member is in the committee
-            var member = result?.Committee?.Members?.FirstOrDefault(m =>
-                m.BioguideId?.Equals(bioguideId, StringComparison.OrdinalIgnoreCase) == true);
-
-            if (member == null)
-                return null;
-
-            return new CommitteeMembership
-            {
-                CommitteeCode = committeeCode,
-                CommitteeName = "Unknown", // Will be set by caller
-                Chamber = chamber,
-                Role = member.Title,
-                Rank = member.Rank
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Error checking membership in {Committee}", committeeCode);
-            return null;
         }
     }
 
@@ -260,6 +189,65 @@ public class CongressApiService : ICongressApiService
         normalized = string.Join(" ", normalized.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
 
         return normalized.Trim();
+    }
+
+    /// <summary>
+    /// Parses YAML committee membership data and extracts committees for a specific bioguide ID.
+    /// </summary>
+    private List<CommitteeMembership> ParseCommitteeMemberships(string yaml, string bioguideId)
+    {
+        var committees = new List<CommitteeMembership>();
+
+        try
+        {
+            var deserializer = new DeserializerBuilder().Build();
+            var yamlObject = deserializer.Deserialize<Dictionary<string, CommitteeYaml>>(yaml);
+
+            if (yamlObject == null)
+                return committees;
+
+            foreach (var kvp in yamlObject)
+            {
+                var committeeCode = kvp.Key;
+                var committee = kvp.Value;
+
+                if (committee.Members == null)
+                    continue;
+
+                var member = committee.Members.FirstOrDefault(m =>
+                    m.Bioguide?.Equals(bioguideId, StringComparison.OrdinalIgnoreCase) == true);
+
+                if (member != null)
+                {
+                    // Determine chamber from committee code
+                    string chamber;
+                    if (committeeCode.StartsWith("HS"))
+                        chamber = "house";
+                    else if (committeeCode.StartsWith("SS"))
+                        chamber = "senate";
+                    else if (committeeCode.StartsWith("JS"))
+                        chamber = "joint";
+                    else
+                        chamber = "unknown";
+
+                    committees.Add(new CommitteeMembership
+                    {
+                        CommitteeCode = committeeCode,
+                        CommitteeName = committee.Name ?? committeeCode,
+                        Chamber = chamber,
+                        Role = member.Party, // In the YAML, this is "majority" or "minority"
+                        Rank = member.Rank
+                    });
+                }
+            }
+
+            return committees;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error parsing YAML committee data for bioguide {BioguideId}", bioguideId);
+            return committees;
+        }
     }
 
     #region API Response Models
@@ -316,6 +304,21 @@ public class CongressApiService : ICongressApiService
 
         [JsonPropertyName("rank")]
         public int? Rank { get; set; }
+    }
+
+    // YAML models for unitedstates/congress-legislators data
+    private class CommitteeYaml
+    {
+        public string? Name { get; set; }
+        public List<MemberYaml>? Members { get; set; }
+    }
+
+    private class MemberYaml
+    {
+        public string? Name { get; set; }
+        public string? Party { get; set; }
+        public int? Rank { get; set; }
+        public string? Bioguide { get; set; }
     }
 
     #endregion
