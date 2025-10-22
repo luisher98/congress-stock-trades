@@ -65,6 +65,18 @@ public class PdfProcessor : IPdfProcessor
 
         _logger.LogInformation("Extracted {Count} transactions from PDF", transactions.Count);
 
+        // Validate that we got meaningful data from the model
+        if (transactions.Count == 0)
+        {
+            _logger.LogWarning("PDF {FilingId} produced zero transactions - may be incompatible format", filingId);
+            throw new InvalidOperationException($"PDF format incompatible with model - no transactions extracted from filing {filingId}");
+        }
+
+        if (filingInfo.Name == "Unknown" || filingInfo.State_District == "Unknown")
+        {
+            _logger.LogWarning("PDF {FilingId} missing critical filer information - may be incompatible format", filingId);
+        }
+
         // Extract additional fields from document
         var document = result.Documents.FirstOrDefault();
 

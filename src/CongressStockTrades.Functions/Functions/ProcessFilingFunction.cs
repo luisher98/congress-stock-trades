@@ -108,6 +108,21 @@ public class ProcessFilingFunction
 
             throw; // Will retry and eventually move to poison queue
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("PDF format incompatible"))
+        {
+            // Don't retry incompatible PDFs - log and skip
+            _logger.LogWarning(ex, "Incompatible PDF format for filing {FilingId} - skipping without retry", message?.FilingId);
+
+            if (message != null)
+            {
+                await _notificationService.NotifyErrorAsync(
+                    message.FilingId,
+                    $"PDF format incompatible with trained model - unable to extract transactions");
+            }
+
+            // Don't throw - this allows the message to be removed from queue without retries
+            return;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing filing {FilingId}", message?.FilingId);
