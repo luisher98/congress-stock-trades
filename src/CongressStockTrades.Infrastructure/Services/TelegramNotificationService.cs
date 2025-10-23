@@ -1,4 +1,5 @@
 using CongressStockTrades.Core.Models;
+using CongressStockTrades.Core.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
@@ -14,16 +15,19 @@ public class TelegramNotificationService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<TelegramNotificationService> _logger;
+    private readonly ICommitteeRosterRepository? _committeeRosterRepository;
     private readonly string _botToken;
     private readonly string _chatId;
     private readonly bool _enabled;
 
     public TelegramNotificationService(
         IConfiguration configuration,
-        ILogger<TelegramNotificationService> logger)
+        ILogger<TelegramNotificationService> logger,
+        ICommitteeRosterRepository? committeeRosterRepository = null)
     {
         _httpClient = new HttpClient();
         _logger = logger;
+        _committeeRosterRepository = committeeRosterRepository;
 
         _botToken = configuration["Telegram__BotToken"]
             ?? Environment.GetEnvironmentVariable("Telegram__BotToken")
@@ -58,7 +62,27 @@ public class TelegramNotificationService
 
         try
         {
-            var message = FormatTransactionMessage(transaction);
+            // Try to get committee assignments from roster database
+            List<AssignmentDocument>? assignments = null;
+            if (_committeeRosterRepository != null)
+            {
+                try
+                {
+                    var memberKey = ConvertToMemberKey(transaction.Filing_Information.Name, transaction.Filing_Information.State_District);
+                    if (!string.IsNullOrEmpty(memberKey))
+                    {
+                        assignments = await _committeeRosterRepository.GetMemberAssignmentsAsync(memberKey);
+                        _logger.LogInformation("Found {Count} committee assignments for {MemberKey}", assignments.Count, memberKey);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to retrieve committee assignments for {Name}", transaction.Filing_Information.Name);
+                    // Fall back to old committee data if available
+                }
+            }
+
+            var message = FormatTransactionMessage(transaction, assignments);
             await SendMessageAsync(message);
 
             _logger.LogInformation("Sent Telegram notification for filing {FilingId}", transaction.FilingId);
@@ -91,7 +115,7 @@ public class TelegramNotificationService
         }
     }
 
-    private string FormatTransactionMessage(TransactionDocument transaction)
+    private string FormatTransactionMessage(TransactionDocument transaction, List<AssignmentDocument>? assignments = null)
     {
         var sb = new StringBuilder();
 
@@ -114,8 +138,32 @@ public class TelegramNotificationService
             sb.AppendLine("💎 *IPO Transaction*");
         }
 
-        // Committee Memberships
-        if (transaction.Filing_Information.Committees?.Any() == true)
+        // Committee Memberships from roster database (preferred)
+        if (assignments?.Any() == true)
+        {
+            sb.AppendLine();
+
+            // Group by committee (not subcommittee) to show main committee assignments
+            var committeeAssignments = assignments
+                .Where(a => !string.IsNullOrEmpty(a.CommitteeAssignmentKey))
+                .GroupBy(a => a.CommitteeAssignmentKey)
+                .Select(g => g.OrderBy(a => a.PositionOrder).First()) // Take the one with lowest position order
+                .OrderBy(a => a.PositionOrder)
+                .ToList();
+
+            if (committeeAssignments.Any())
+            {
+                sb.AppendLine("📋 *Committee Assignments:*");
+                foreach (var assignment in committeeAssignments)
+                {
+                    var role = assignment.Role != "Member" ? $" \\({assignment.Role}\\)" : "";
+                    var committeeName = ConvertCommitteeKeyToDisplayName(assignment.CommitteeAssignmentKey ?? "");
+                    sb.AppendLine($"  • {EscapeMarkdown(committeeName)}{role}");
+                }
+            }
+        }
+        // Fallback to old API committee data if roster data unavailable
+        else if (transaction.Filing_Information.Committees?.Any() == true)
         {
             sb.AppendLine();
 
@@ -353,5 +401,56 @@ public class TelegramNotificationService
         text = text.Replace("`", "\\`");
 
         return text;
+    }
+
+    /// <summary>
+    /// Converts member name and state-district to a memberKey matching the roster database format.
+    /// Example: "Doe, John" + "CA12" -> "doe-john-ca12"
+    /// </summary>
+    private string? ConvertToMemberKey(string name, string stateDistrict)
+    {
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(stateDistrict))
+            return null;
+
+        try
+        {
+            // Normalize name: "Doe, John" -> "doe-john"
+            var normalized = name
+                .ToLowerInvariant()
+                .Replace(", ", "-")
+                .Replace(" ", "-")
+                .Replace("'", "")
+                .Replace(".", "");
+
+            // Add state-district: "ca12"
+            var memberKey = $"{normalized}-{stateDistrict.ToLowerInvariant()}";
+
+            return memberKey;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to convert name {Name} and district {District} to memberKey", name, stateDistrict);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Converts a committee key to a display name.
+    /// Example: "agriculture" -> "Agriculture"
+    /// </summary>
+    private string ConvertCommitteeKeyToDisplayName(string committeeKey)
+    {
+        if (string.IsNullOrEmpty(committeeKey))
+            return committeeKey;
+
+        // Replace hyphens with spaces and title case
+        var words = committeeKey.Split('-');
+        var titleCased = words.Select(w =>
+        {
+            if (string.IsNullOrEmpty(w)) return w;
+            return char.ToUpperInvariant(w[0]) + w.Substring(1);
+        });
+
+        return string.Join(" ", titleCased);
     }
 }

@@ -68,4 +68,9 @@ public interface ICommitteeRosterRepository
     /// Gets the count of assignments from the previous run for churn detection.
     /// </summary>
     Task<int> GetPreviousAssignmentCountAsync(string url, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets all committee/subcommittee assignments for a specific member.
+    /// </summary>
+    Task<List<AssignmentDocument>> GetMemberAssignmentsAsync(string memberKey, CancellationToken cancellationToken = default);
 }

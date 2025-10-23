@@ -186,4 +186,25 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
         var lastSource = await GetLastSourceAsync(url, cancellationToken);
         return lastSource?.ResultCounts.AssignmentsCount ?? 0;
     }
+
+    public async Task<List<AssignmentDocument>> GetMemberAssignmentsAsync(string memberKey, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Retrieving assignments for member {MemberKey}", memberKey);
+
+        var query = new QueryDefinition(
+            "SELECT * FROM c WHERE c.memberKey = @memberKey")
+            .WithParameter("@memberKey", memberKey);
+
+        var results = new List<AssignmentDocument>();
+        using var iterator = _assignmentsContainer.GetItemQueryIterator<AssignmentDocument>(query);
+
+        while (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(cancellationToken);
+            results.AddRange(response);
+        }
+
+        _logger.LogInformation("Found {Count} assignments for member {MemberKey}", results.Count, memberKey);
+        return results;
+    }
 }

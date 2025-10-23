@@ -124,10 +124,32 @@ cd congress-stock-trades
 dotnet restore src/CongressStockTrades.sln
 ```
 
-### 3. Get Congress.gov API Key
+### 3. Get Required API Keys and Tokens
+
+#### Congress.gov API Key (Required)
 Sign up for a free API key at [https://api.congress.gov/sign-up/](https://api.congress.gov/sign-up/)
 - Free tier includes 5,000 requests per hour
 - Used to fetch committee membership information for members
+
+#### Alpha Vantage API Key (Required)
+Get a free API key at [https://www.alphavantage.co/support/#api-key](https://www.alphavantage.co/support/#api-key)
+- Free tier includes 25 API calls per day
+- Used to enrich stock data with company information, sector, and industry
+
+#### Telegram Bot Token (Optional)
+If you want Telegram notifications for new stock trades:
+1. Create a bot via [@BotFather](https://t.me/botfather) on Telegram
+2. Send `/newbot` and follow the instructions
+3. Save the bot token provided
+4. Start a chat with your bot and send any message
+5. Get your chat ID by visiting: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
+6. Look for the `chat.id` value in the response
+
+**For cloud deployment**, you must also configure these GitHub Secrets:
+- `TELEGRAM_BOT_TOKEN` - Your bot token from BotFather
+- `TELEGRAM_CHAT_ID` - Your Telegram chat ID
+
+See [Deployment Guide](docs/DEPLOYMENT.md) for instructions on setting GitHub Secrets.
 
 ### 4. Configure Local Settings
 Create `src/CongressStockTrades.Functions/local.settings.json`:
@@ -144,7 +166,10 @@ Create `src/CongressStockTrades.Functions/local.settings.json`:
     "DocumentIntelligence__Endpoint": "https://your-docintel.cognitiveservices.azure.com/",
     "DocumentIntelligence__Key": "your-doc-intel-key",
     "SignalR__ConnectionString": "Endpoint=https://your-signalr.service.signalr.net;AccessKey=xxx",
-    "CongressApi__ApiKey": "your-congress-api-key-from-api-congress-gov"
+    "CongressApi__ApiKey": "your-congress-api-key-from-api-congress-gov",
+    "AlphaVantage__ApiKey": "your-alpha-vantage-api-key",
+    "Telegram__BotToken": "your-telegram-bot-token (optional)",
+    "Telegram__ChatId": "your-telegram-chat-id (optional)"
   }
 }
 ```
