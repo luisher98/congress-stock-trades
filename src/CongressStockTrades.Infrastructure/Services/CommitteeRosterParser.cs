@@ -63,43 +63,51 @@ public class CommitteeRosterParser : ICommitteeRosterParser
             pdfStream.Position = 0;
         }
 
-        using var document = PdfDocument.Open(pdfStream, new UglyToad.PdfPig.ParsingOptions { ClipPaths = true });
-
-        if (document.NumberOfPages < 1)
+        try
         {
-            _logger.LogWarning("PDF has no pages");
-            return null;
+            using var document = PdfDocument.Open(pdfStream, new UglyToad.PdfPig.ParsingOptions { ClipPaths = true });
+
+            if (document.NumberOfPages < 1)
+            {
+                _logger.LogWarning("PDF has no pages");
+                return Task.FromResult<string?>(null);
+            }
+
+            var firstPage = document.GetPage(1);
+            var text = firstPage.Text;
+
+            _logger.LogInformation("First 500 characters of PDF page 1: {Text}", text.Substring(0, Math.Min(500, text.Length)));
+
+            var match = CoverDatePattern.Match(text);
+            if (match.Success)
+            {
+                var monthName = match.Groups[1].Value; // Month name (e.g., "September")
+                var day = int.Parse(match.Groups[2].Value);
+                var year = int.Parse(match.Groups[3].Value);
+
+                try
+                {
+                    var month = DateTime.ParseExact(monthName, "MMMM", CultureInfo.InvariantCulture).Month;
+                    var date = new DateTime(year, month, day);
+                    var formattedDate = date.ToString("yyyy-MM-dd");
+
+                    _logger.LogInformation("Extracted cover date: {SourceDate}", formattedDate);
+                    return Task.FromResult<string?>(formattedDate);
+                }
+                catch (FormatException ex)
+                {
+                    _logger.LogWarning("Failed to parse month name '{MonthName}': {Error}", monthName, ex.Message);
+                }
+            }
+
+            _logger.LogWarning("Could not extract cover date from PDF");
+            return Task.FromResult<string?>(null);
         }
-
-        var firstPage = document.GetPage(1);
-        var text = firstPage.Text;
-
-        _logger.LogInformation("First 500 characters of PDF page 1: {Text}", text.Substring(0, Math.Min(500, text.Length)));
-
-        var match = CoverDatePattern.Match(text);
-        if (match.Success)
+        catch (Exception ex)
         {
-            var monthName = match.Groups[1].Value; // Month name (e.g., "September")
-            var day = int.Parse(match.Groups[2].Value);
-            var year = int.Parse(match.Groups[3].Value);
-
-            try
-            {
-                var month = DateTime.ParseExact(monthName, "MMMM", CultureInfo.InvariantCulture).Month;
-                var date = new DateTime(year, month, day);
-                var formattedDate = date.ToString("yyyy-MM-dd");
-
-                _logger.LogInformation("Extracted cover date: {SourceDate}", formattedDate);
-                return Task.FromResult<string?>(formattedDate);
-            }
-            catch (FormatException ex)
-            {
-                _logger.LogWarning("Failed to parse month name '{MonthName}': {Error}", monthName, ex.Message);
-            }
+            _logger.LogError(ex, "Failed to open or parse PDF document");
+            return Task.FromResult<string?>(null);
         }
-
-        _logger.LogWarning("Could not extract cover date from PDF");
-        return Task.FromResult<string?>(null);
     }
 
     public Task<CommitteeRosterParseResult> ParseSCSOALAsync(
@@ -124,7 +132,9 @@ public class CommitteeRosterParser : ICommitteeRosterParser
             Assignments = new List<AssignmentDocument>()
         };
 
-        using var document = PdfDocument.Open(pdfStream, new UglyToad.PdfPig.ParsingOptions { ClipPaths = true });
+        try
+        {
+            using var document = PdfDocument.Open(pdfStream, new UglyToad.PdfPig.ParsingOptions { ClipPaths = true });
 
         _logger.LogInformation("PDF has {PageCount} pages", document.NumberOfPages);
 
@@ -465,14 +475,20 @@ public class CommitteeRosterParser : ICommitteeRosterParser
             _logger.LogWarning("Degraded run: no subcommittees found");
         }
 
-        _logger.LogInformation(
-            "Parsing complete: {CommitteeCount} committees, {SubcommitteeCount} subcommittees, {MemberCount} members, {AssignmentCount} assignments",
-            result.Committees.Count,
-            result.Subcommittees.Count,
-            result.Members.Count,
-            result.Assignments.Count);
+            _logger.LogInformation(
+                "Parsing complete: {CommitteeCount} committees, {SubcommitteeCount} subcommittees, {MemberCount} members, {AssignmentCount} assignments",
+                result.Committees.Count,
+                result.Subcommittees.Count,
+                result.Members.Count,
+                result.Assignments.Count);
 
-        return Task.FromResult(result);
+            return Task.FromResult(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open or parse PDF document");
+            return Task.FromResult(result); // Return empty result
+        }
     }
 
     private List<string> GetLinesFromPage(Page page)
