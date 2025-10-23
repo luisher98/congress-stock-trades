@@ -62,6 +62,20 @@ resource filingsQueue 'Microsoft.Storage/storageAccounts/queueServices/queues@20
   name: 'filings-to-process'
 }
 
+// Blob service for committee rosters
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-01-01' = {
+  parent: storageAccount
+  name: 'default'
+}
+
+resource committeeRostersContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
+  parent: blobService
+  name: 'committee-rosters'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
 // Cosmos DB Account (Serverless)
 resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
   name: cosmosDbAccountName
@@ -110,6 +124,156 @@ resource transactionsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabas
       partitionKey: {
         paths: [
           '/filingId'
+        ]
+        kind: 'Hash'
+      }
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        includedPaths: [
+          {
+            path: '/*'
+          }
+        ]
+      }
+    }
+  }
+}
+
+// Cosmos DB Container: committees
+resource committeesContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
+  parent: cosmosDb
+  name: 'committees'
+  properties: {
+    resource: {
+      id: 'committees'
+      partitionKey: {
+        paths: [
+          '/committeeKey'
+        ]
+        kind: 'Hash'
+      }
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        includedPaths: [
+          {
+            path: '/*'
+          }
+        ]
+      }
+    }
+  }
+}
+
+// Cosmos DB Container: subcommittees
+resource subcommitteesContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
+  parent: cosmosDb
+  name: 'subcommittees'
+  properties: {
+    resource: {
+      id: 'subcommittees'
+      partitionKey: {
+        paths: [
+          '/committeeKey'
+        ]
+        kind: 'Hash'
+      }
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        includedPaths: [
+          {
+            path: '/*'
+          }
+        ]
+      }
+    }
+  }
+}
+
+// Cosmos DB Container: members
+resource membersContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
+  parent: cosmosDb
+  name: 'members'
+  properties: {
+    resource: {
+      id: 'members'
+      partitionKey: {
+        paths: [
+          '/memberKey'
+        ]
+        kind: 'Hash'
+      }
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        includedPaths: [
+          {
+            path: '/*'
+          }
+        ]
+      }
+    }
+  }
+}
+
+// Cosmos DB Container: assignments
+resource assignmentsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
+  parent: cosmosDb
+  name: 'assignments'
+  properties: {
+    resource: {
+      id: 'assignments'
+      partitionKey: {
+        paths: [
+          '/committeeKey'
+        ]
+        kind: 'Hash'
+      }
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        includedPaths: [
+          {
+            path: '/*'
+          }
+        ]
+      }
+    }
+  }
+}
+
+// Cosmos DB Container: sources
+resource sourcesContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
+  parent: cosmosDb
+  name: 'sources'
+  properties: {
+    resource: {
+      id: 'sources'
+      partitionKey: {
+        paths: [
+          '/url'
+        ]
+        kind: 'Hash'
+      }
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        includedPaths: [
+          {
+            path: '/*'
+          }
+        ]
+      }
+    }
+  }
+}
+
+// Cosmos DB Container: qa-findings
+resource qaFindingsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
+  parent: cosmosDb
+  name: 'qa-findings'
+  properties: {
+    resource: {
+      id: 'qa-findings'
+      partitionKey: {
+        paths: [
+          '/sourceDate'
         ]
         kind: 'Hash'
       }
@@ -295,6 +459,34 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'DocumentIntelligence__ModelId'
           value: documentIntelligenceModelId
+        }
+        {
+          name: 'CommitteeRosters__Enabled'
+          value: 'true'
+        }
+        {
+          name: 'CommitteeRosters__SCSOALUrl'
+          value: 'https://clerk.house.gov/committee_info/scsoal.pdf'
+        }
+        {
+          name: 'CommitteeRosters__OALUrl'
+          value: 'https://clerk.house.gov/committee_info/oal.pdf'
+        }
+        {
+          name: 'CommitteeRosters__UseOALForQA'
+          value: 'false'
+        }
+        {
+          name: 'CommitteeRosters__EnableDocIntelFallback'
+          value: 'false'
+        }
+        {
+          name: 'CommitteeRosters__ParserVersion'
+          value: '1.0.0'
+        }
+        {
+          name: 'CommitteeRosters__ChurnThresholdPercent'
+          value: '0.25'
         }
       ]
       netFrameworkVersion: 'v8.0'

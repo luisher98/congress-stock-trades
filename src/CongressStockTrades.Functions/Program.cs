@@ -1,5 +1,6 @@
 using Azure.AI.FormRecognizer.DocumentAnalysis;
 using Azure;
+using CongressStockTrades.Core.Models;
 using CongressStockTrades.Core.Services;
 using CongressStockTrades.Infrastructure.Repositories;
 using CongressStockTrades.Infrastructure.Services;
@@ -88,6 +89,15 @@ var host = new HostBuilder()
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
         services.AddSingleton<INotificationService, SignalRNotificationService>();
         services.AddSingleton<TelegramNotificationService>();
+
+        // Committee Roster services
+        services.AddSingleton<IBlobStorageService, BlobStorageService>();
+        services.AddSingleton<ICommitteeRosterParser, CommitteeRosterParser>();
+        services.AddSingleton<ICommitteeRosterRepository, CommitteeRosterRepository>();
+        services.AddSingleton<ICommitteeRosterQAService, CommitteeRosterQAService>();
+
+        // Committee Roster settings
+        services.Configure<CommitteeRosterSettings>(context.Configuration.GetSection("CommitteeRosters"));
 
         // Register logging
         services.AddLogging();
