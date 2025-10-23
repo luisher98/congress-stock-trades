@@ -8,5 +8,12 @@
             },
             "enableLiveMetricsFilters": true
         }
+    },
+    "functionTimeout": "00:10:00",
+    "http": {
+        "routePrefix": "api",
+        "maxOutstandingRequests": 200,
+        "maxConcurrentRequests": 100,
+        "dynamicThrottlesEnabled": true
     }
 }

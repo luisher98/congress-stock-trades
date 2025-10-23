@@ -14,11 +14,40 @@ public class CommitteeRosterParser : ICommitteeRosterParser
     private readonly ILogger<CommitteeRosterParser> _logger;
 
     // Regex patterns
-    private static readonly Regex CoverDatePattern = new(@"([A-Z]+)\s+(\d{1,2}),\s+(\d{4})", RegexOptions.Compiled);
-    private static readonly Regex CommitteeHeaderPattern = new(@"^COMMITTEE\s+ON\s+(.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // Match date with any prefix text (e.g., "https://clerk.house.govSEPTEMBER 16, 2025")
+    // Looks for: (optionaltext)(MONTH) (DAY), (YEAR)
+    private static readonly Regex CoverDatePattern = new(@"(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+(\d{1,2}),\s+(\d{4})", RegexOptions.Compiled |  RegexOptions.IgnoreCase);
+    // Committee headers are single words or phrases in all caps (e.g., "AGRICULTURE", "ARMED SERVICES")
+    // Must be at least 3 chars and not match common non-committee phrases
+    private static readonly Regex CommitteeHeaderPattern = new(@"^([A-Z][A-Z\s,&'-]+)$", RegexOptions.Compiled);
     private static readonly Regex SubcommitteeHeaderPattern = new(@"^SUBCOMMITTEES?\s+OF\s+THE\s+COMMITTEE\s+ON\s+(.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex MemberLinePattern = new(@"^\s*(\d+)\.\s+(.+?)(?:,\s+of\s+([A-Z][a-z\s]+))?(?:,\s+(.+))?$", RegexOptions.Compiled);
     private static readonly Regex RolePattern = new(@"\b(Chair|Ranking Member|Vice Chair|Ex Officio)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // List of known standing committee names (used to detect when we've left a subcommittee section)
+    private static readonly HashSet<string> KnownStandingCommittees = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AGRICULTURE",
+        "APPROPRIATIONS",
+        "ARMED SERVICES",
+        "BUDGET",
+        "EDUCATION AND THE WORKFORCE",
+        "ENERGY AND COMMERCE",
+        "ETHICS",
+        "FINANCIAL SERVICES",
+        "FOREIGN AFFAIRS",
+        "HOMELAND SECURITY",
+        "HOUSE ADMINISTRATION",
+        "JUDICIARY",
+        "NATURAL RESOURCES",
+        "OVERSIGHT AND ACCOUNTABILITY",
+        "RULES",
+        "SCIENCE, SPACE, AND TECHNOLOGY",
+        "SMALL BUSINESS",
+        "TRANSPORTATION AND INFRASTRUCTURE",
+        "VETERANS' AFFAIRS",
+        "WAYS AND MEANS"
+    };
 
     public CommitteeRosterParser(ILogger<CommitteeRosterParser> logger)
     {
@@ -43,21 +72,30 @@ public class CommitteeRosterParser : ICommitteeRosterParser
         }
 
         var firstPage = document.GetPage(1);
-        var text = firstPage.Text.ToUpperInvariant();
+        var text = firstPage.Text;
+
+        _logger.LogInformation("First 500 characters of PDF page 1: {Text}", text.Substring(0, Math.Min(500, text.Length)));
 
         var match = CoverDatePattern.Match(text);
         if (match.Success)
         {
-            var monthName = match.Groups[1].Value;
+            var monthName = match.Groups[1].Value; // Month name (e.g., "September")
             var day = int.Parse(match.Groups[2].Value);
             var year = int.Parse(match.Groups[3].Value);
 
-            var month = DateTime.ParseExact(monthName, "MMMM", CultureInfo.InvariantCulture).Month;
-            var date = new DateTime(year, month, day);
-            var formattedDate = date.ToString("yyyy-MM-dd");
+            try
+            {
+                var month = DateTime.ParseExact(monthName, "MMMM", CultureInfo.InvariantCulture).Month;
+                var date = new DateTime(year, month, day);
+                var formattedDate = date.ToString("yyyy-MM-dd");
 
-            _logger.LogInformation("Extracted cover date: {SourceDate}", formattedDate);
-            return Task.FromResult<string?>(formattedDate);
+                _logger.LogInformation("Extracted cover date: {SourceDate}", formattedDate);
+                return Task.FromResult<string?>(formattedDate);
+            }
+            catch (FormatException ex)
+            {
+                _logger.LogWarning("Failed to parse month name '{MonthName}': {Error}", monthName, ex.Message);
+            }
         }
 
         _logger.LogWarning("Could not extract cover date from PDF");
@@ -96,6 +134,7 @@ public class CommitteeRosterParser : ICommitteeRosterParser
         string? currentSubcommitteeName = null;
         string? currentSubcommitteeKey = null;
         bool inMajoritySection = true;
+        bool inSubcommitteeSection = false; // Track when we're in a subcommittees section
         int pageNumber = 0;
 
         foreach (var page in document.GetPages())
@@ -111,70 +150,170 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                 if (string.IsNullOrWhiteSpace(trimmed))
                     continue;
 
-                // Check for committee header
-                var committeeMatch = CommitteeHeaderPattern.Match(trimmed);
-                if (committeeMatch.Success)
+                // Check for main committee listing section header (resets subcommittee mode)
+                if (trimmed.Contains("ALPHABETICAL LIST OF STANDING COMMITTEES", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Contains("STANDING COMMITTEES", StringComparison.OrdinalIgnoreCase) && trimmed.Length < 30)
                 {
-                    currentCommitteeName = committeeMatch.Groups[1].Value.Trim();
-                    currentCommitteeKey = NormalizeName(currentCommitteeName);
-                    currentSubcommitteeName = null;
-                    currentSubcommitteeKey = null;
-                    inMajoritySection = true;
-
-                    // Add committee
-                    var committee = new CommitteeDocument
-                    {
-                        Id = currentCommitteeKey,
-                        CommitteeKey = currentCommitteeKey,
-                        Name = currentCommitteeName,
-                        Chamber = "House",
-                        Type = "Standing", // Default; can be enhanced
-                        Provenance = new CommitteeProvenance
-                        {
-                            SourceDate = sourceDate,
-                            PageNumber = pageNumber,
-                            BlobUri = blobUri,
-                            PdfHash = pdfHash
-                        }
-                    };
-
-                    result.Committees.Add(committee);
-                    _logger.LogDebug("Found committee: {CommitteeName}", currentCommitteeName);
+                    inSubcommitteeSection = false;
+                    _logger.LogDebug("Entering main committee listing section");
                     continue;
                 }
 
-                // Check for subcommittee header
+                // Check for subcommittee section header FIRST (e.g., "SUBCOMMITTEES OF THE COMMITTEE ON AGRICULTURE")
+                // This must come before the general all-caps pattern check
                 var subcommitteeMatch = SubcommitteeHeaderPattern.Match(trimmed);
                 if (subcommitteeMatch.Success)
                 {
-                    if (currentCommitteeKey == null)
+                    // Extract parent committee name from the header
+                    var parentCommitteeName = subcommitteeMatch.Groups[1].Value.Trim();
+                    var parentCommitteeKey = NormalizeName(parentCommitteeName);
+
+                    // Ensure the parent committee exists in our collection
+                    if (!result.Committees.Any(c => c.CommitteeKey == parentCommitteeKey))
                     {
-                        _logger.LogWarning("Found subcommittee without parent committee on page {Page}", pageNumber);
+                        var committee = new CommitteeDocument
+                        {
+                            Id = parentCommitteeKey,
+                            CommitteeKey = parentCommitteeKey,
+                            Name = parentCommitteeName,
+                            Chamber = "House",
+                            Type = "Standing",
+                            Provenance = new CommitteeProvenance
+                            {
+                                SourceDate = sourceDate,
+                                PageNumber = pageNumber,
+                                BlobUri = blobUri,
+                                PdfHash = pdfHash
+                            }
+                        };
+                        result.Committees.Add(committee);
+                        _logger.LogDebug("Implicitly created parent committee from subcommittee section: {CommitteeName}", parentCommitteeName);
+                    }
+
+                    // Set current committee context to the parent committee
+                    currentCommitteeName = parentCommitteeName;
+                    currentCommitteeKey = parentCommitteeKey;
+                    currentSubcommitteeName = null;
+                    currentSubcommitteeKey = null;
+                    inSubcommitteeSection = true;
+                    inMajoritySection = true;
+
+                    _logger.LogDebug("Entering subcommittee section for committee: {CommitteeName}", parentCommitteeName);
+                    continue;
+                }
+
+                // Check for committee/subcommittee header (all-caps line)
+                var committeeMatch = CommitteeHeaderPattern.Match(trimmed);
+                if (committeeMatch.Success)
+                {
+                    var potentialName = committeeMatch.Groups[1].Value.Trim();
+
+                    // Filter out common non-committee phrases
+                    var ignorePatterns = new[]
+                    {
+                        "STANDING COMMITTEES",
+                        "SELECT COMMITTEES",
+                        "JOINT COMMITTEES",
+                        "ALPHABETICAL LIST",
+                        "HOUSE OF REPRESENTATIVES",
+                        "UNITED STATES",
+                        "ONE HUNDRED",
+                        "CONGRESS",
+                        "Ratio",
+                        "AND THEIR",
+                        "SUBCOMMITTEES",
+                        "OF THE",
+                        "Republicans in",
+                        "Democrats in",
+                        "Delegates in",
+                        "WASHINGTON",
+                        "Prepared under",
+                        "[The chairman",  // Skip bracketed notes
+                        "CONTENTS"
+                    };
+
+                    if (ignorePatterns.Any(p => potentialName.Contains(p, StringComparison.OrdinalIgnoreCase)))
+                    {
                         continue;
                     }
 
-                    currentSubcommitteeName = trimmed;
-                    currentSubcommitteeKey = $"{currentCommitteeKey}::{NormalizeName(currentSubcommitteeName)}";
-                    inMajoritySection = true;
-
-                    var subcommittee = new SubcommitteeDocument
+                    // Additional validation: names should be reasonably short but not too short
+                    if (potentialName.Length < 4 || potentialName.Length > 100)
                     {
-                        Id = currentSubcommitteeKey,
-                        CommitteeKey = currentCommitteeKey,
-                        SubcommitteeKey = currentSubcommitteeKey,
-                        ParentCommitteeName = currentCommitteeName!,
-                        Name = currentSubcommitteeName,
-                        Provenance = new CommitteeProvenance
-                        {
-                            SourceDate = sourceDate,
-                            PageNumber = pageNumber,
-                            BlobUri = blobUri,
-                            PdfHash = pdfHash
-                        }
-                    };
+                        continue;
+                    }
 
-                    result.Subcommittees.Add(subcommittee);
-                    _logger.LogDebug("Found subcommittee: {SubcommitteeName}", currentSubcommitteeName);
+                    // Skip single words that are likely not committees
+                    var singleWordExclusions = new[] { "AND", "THE", "OF", "IN", "TO", "FOR", "WITH" };
+                    if (singleWordExclusions.Contains(potentialName, StringComparer.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    // Check if this is a known standing committee (which means we've left the subcommittee section)
+                    bool isKnownStandingCommittee = KnownStandingCommittees.Contains(potentialName);
+
+                    // Determine if this is a subcommittee or main committee
+                    if (inSubcommitteeSection && currentCommitteeKey != null && !isKnownStandingCommittee)
+                    {
+                        // This is a subcommittee name
+                        currentSubcommitteeName = potentialName;
+                        currentSubcommitteeKey = $"{currentCommitteeKey}::{NormalizeName(currentSubcommitteeName)}";
+                        inMajoritySection = true;
+
+                        var subcommittee = new SubcommitteeDocument
+                        {
+                            Id = currentSubcommitteeKey,
+                            CommitteeKey = currentCommitteeKey,
+                            SubcommitteeKey = currentSubcommitteeKey,
+                            ParentCommitteeName = currentCommitteeName!,
+                            Name = currentSubcommitteeName,
+                            Provenance = new CommitteeProvenance
+                            {
+                                SourceDate = sourceDate,
+                                PageNumber = pageNumber,
+                                BlobUri = blobUri,
+                                PdfHash = pdfHash
+                            }
+                        };
+
+                        result.Subcommittees.Add(subcommittee);
+                        _logger.LogDebug("Found subcommittee: {SubcommitteeName} under {ParentCommittee}", currentSubcommitteeName, currentCommitteeName);
+                    }
+                    else
+                    {
+                        // This is a main committee
+                        currentCommitteeName = potentialName;
+                        currentCommitteeKey = NormalizeName(currentCommitteeName);
+                        currentSubcommitteeName = null;
+                        currentSubcommitteeKey = null;
+                        inMajoritySection = true;
+                        inSubcommitteeSection = false; // Reset subcommittee flag when we hit a new main committee
+
+                        // Add committee (avoid duplicates)
+                        if (!result.Committees.Any(c => c.CommitteeKey == currentCommitteeKey))
+                        {
+                            var committee = new CommitteeDocument
+                            {
+                                Id = currentCommitteeKey,
+                                CommitteeKey = currentCommitteeKey,
+                                Name = currentCommitteeName,
+                                Chamber = "House",
+                                Type = "Standing", // Default; can be enhanced
+                                Provenance = new CommitteeProvenance
+                                {
+                                    SourceDate = sourceDate,
+                                    PageNumber = pageNumber,
+                                    BlobUri = blobUri,
+                                    PdfHash = pdfHash
+                                }
+                            };
+
+                            result.Committees.Add(committee);
+                            _logger.LogDebug("Found committee: {CommitteeName}", currentCommitteeName);
+                        }
+                    }
+
                     continue;
                 }
 
@@ -190,10 +329,36 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                     continue;
                 }
 
-                // Parse member line
-                var memberMatch = MemberLinePattern.Match(trimmed);
-                if (memberMatch.Success)
+                // Parse member line - check if it contains two members (majority and minority on same line)
+                // Pattern: "14. Carlos A. Gimenez, FL 14. Marilyn Strickland, WA"
+                // Always check for dual members first by looking for multiple position numbers
+                var splitPattern = new Regex(@"(\d+\.\s+.+?)(?=\s+\d+\.|$)");
+                var splits = splitPattern.Matches(trimmed);
+
+                List<string> memberLines = new();
+                if (splits.Count > 1)
                 {
+                    // Line contains multiple position numbers - split into separate members
+                    _logger.LogDebug("Found {Count} members on one line: {Line}", splits.Count, trimmed);
+                    foreach (Match split in splits)
+                    {
+                        memberLines.Add(split.Groups[1].Value.Trim());
+                    }
+                }
+                else
+                {
+                    // Single member or no match - process as-is
+                    memberLines.Add(trimmed);
+                }
+
+                // Process each member line (could be 1 or 2 members)
+                bool isMajority = inMajoritySection;
+                foreach (var memberLine in memberLines)
+                {
+                    var memberMatch = MemberLinePattern.Match(memberLine);
+                    if (!memberMatch.Success)
+                        continue;
+
                     if (currentCommitteeKey == null)
                     {
                         _logger.LogWarning("Found member line without current committee on page {Page}", pageNumber);
@@ -265,7 +430,7 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                         CommitteeAssignmentKey = currentSubcommitteeKey == null ? currentCommitteeKey : null,
                         SubcommitteeAssignmentKey = currentSubcommitteeKey,
                         Role = role,
-                        Group = inMajoritySection ? "Majority" : "Minority",
+                        Group = isMajority ? "Majority" : "Minority",
                         PositionOrder = position,
                         Provenance = new AssignmentProvenance
                         {
@@ -273,11 +438,14 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                             PageNumber = pageNumber,
                             BlobUri = blobUri,
                             PdfHash = pdfHash,
-                            RawLine = trimmed
+                            RawLine = memberLine
                         }
                     };
 
                     result.Assignments.Add(assignment);
+
+                    // After processing first member, switch to minority for second member on same line
+                    isMajority = false;
                 }
             }
         }
@@ -309,8 +477,33 @@ public class CommitteeRosterParser : ICommitteeRosterParser
 
     private List<string> GetLinesFromPage(Page page)
     {
-        var text = page.Text;
-        return text.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+        // Use GetWords() to get properly separated words with position information
+        var words = page.GetWords();
+
+        // Group words by Y position (with a small tolerance for floating point comparison)
+        const double yTolerance = 2.0;
+        var lineGroups = words
+            .GroupBy(w => Math.Round(w.BoundingBox.Bottom / yTolerance) * yTolerance)
+            .OrderByDescending(g => g.Key) // Top to bottom (higher Y values first in PDF coordinates)
+            .ToList();
+
+        // Reconstruct lines by joining words in each group, ordered by X position
+        var lines = new List<string>();
+        foreach (var group in lineGroups)
+        {
+            var lineWords = group
+                .OrderBy(w => w.BoundingBox.Left) // Left to right
+                .Select(w => w.Text)
+                .ToList();
+
+            var line = string.Join(" ", lineWords);
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                lines.Add(line);
+            }
+        }
+
+        return lines;
     }
 
     private string NormalizeName(string name)

@@ -100,19 +100,48 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
     public async Task UpsertMembersAsync(IEnumerable<MemberDocument> members, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Upserting {Count} members in batch", members.Count());
-        foreach (var member in members)
+
+        const int maxDegreeOfParallelism = 50;
+        var semaphore = new SemaphoreSlim(maxDegreeOfParallelism);
+
+        var tasks = members.Select(async member =>
         {
-            await UpsertMemberAsync(member, cancellationToken);
-        }
+            await semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                await UpsertMemberAsync(member, cancellationToken);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
     }
 
     public async Task UpsertAssignmentsAsync(IEnumerable<AssignmentDocument> assignments, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Upserting {Count} assignments in batch", assignments.Count());
-        foreach (var assignment in assignments)
+
+        // Use parallel tasks with a max degree of parallelism to avoid overwhelming Cosmos DB
+        const int maxDegreeOfParallelism = 50;
+        var semaphore = new SemaphoreSlim(maxDegreeOfParallelism);
+
+        var tasks = assignments.Select(async assignment =>
         {
-            await UpsertAssignmentAsync(assignment, cancellationToken);
-        }
+            await semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                await UpsertAssignmentAsync(assignment, cancellationToken);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
     }
 
     public async Task<SourceDocument?> GetLastSourceAsync(string url, CancellationToken cancellationToken = default)

@@ -100,6 +100,62 @@ The function runs weekly on **Sundays at 2:00 AM UTC**.
 NCRONTAB expression: `"0 0 2 * * 0"`
 - Format: `second minute hour day month dayOfWeek`
 
+### Manual/On-Demand Execution
+
+For immediate testing or updates, use the HTTP-triggered function:
+
+**Local Development:**
+```bash
+# Basic run (respects change detection)
+curl -X POST http://localhost:7071/api/committee-rosters/update
+
+# Force reprocess (bypasses change detection)
+curl -X POST "http://localhost:7071/api/committee-rosters/update?force=true"
+```
+
+**Azure (using function key):**
+```bash
+# Get function key from Azure Portal or CLI
+FUNCTION_KEY="your-function-key"
+
+# Trigger update
+curl -X POST "https://your-function-app.azurewebsites.net/api/committee-rosters/update?code=$FUNCTION_KEY"
+
+# Force reprocess
+curl -X POST "https://your-function-app.azurewebsites.net/api/committee-rosters/update?force=true&code=$FUNCTION_KEY"
+```
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "sourceDate": "2025-09-16",
+  "pdfHash": "abc123...",
+  "blobUri": "https://storage.../scsoal.pdf",
+  "forced": false,
+  "counts": {
+    "committees": 20,
+    "subcommittees": 85,
+    "members": 435,
+    "assignments": 520
+  },
+  "churnPercent": "5.20%",
+  "qaFindings": 2,
+  "processedAt": "2025-10-23T10:30:00Z"
+}
+```
+
+**Response (No Changes):**
+```json
+{
+  "status": "skipped",
+  "reason": "no_changes_detected",
+  "sourceDate": "2025-09-16",
+  "pdfHash": "abc123...",
+  "message": "No changes since last run. Use ?force=true to reprocess."
+}
+```
+
 ## Parsing Logic
 
 ### Cover Date Extraction
@@ -212,9 +268,13 @@ If enabled and parser detects anomalies:
    cd src/CongressStockTrades.Functions
    func start
    ```
-4. Trigger manually (if not waiting for timer):
+4. Trigger manually:
    ```bash
-   curl http://localhost:7071/admin/functions/UpdateCommitteeRosters
+   # Use the HTTP endpoint for immediate testing
+   curl -X POST http://localhost:7071/api/committee-rosters/update
+
+   # Or force reprocess
+   curl -X POST "http://localhost:7071/api/committee-rosters/update?force=true"
    ```
 
 ### Testing

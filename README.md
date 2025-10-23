@@ -12,11 +12,22 @@ A cloud-native application that automatically detects, processes, and serves Per
 
 ## 🚀 Features
 
+### Stock Trading Disclosures
 - **Automated Monitoring**: Checks House.gov every 5 minutes for new PTR filings
 - **AI-Powered Extraction**: Azure Document Intelligence extracts structured data from PDF forms
 - **Committee Enrichment**: Automatically fetches committee memberships from Congress.gov API
 - **Real-Time Notifications**: SignalR pushes updates to connected clients instantly
 - **REST API**: Query latest transaction data via HTTP endpoints
+
+### Committee Roster Tracking (New!)
+- **Weekly Updates**: Automatically ingests House committee and subcommittee rosters
+- **Full Provenance**: Tracks source date, page, line, and PDF hash for every data point
+- **Change Detection**: Smart diffing to only process when rosters change
+- **Historical Snapshots**: Preserves assignment history over time
+- **Manual Triggers**: HTTP endpoint for on-demand updates (no waiting for weekly timer!)
+- 📚 [Committee Roster Documentation](docs/COMMITTEE_ROSTERS.md) | [Quick Start](docs/COMMITTEE_ROSTERS_QUICKSTART.md)
+
+### Platform
 - **Serverless Architecture**: Auto-scaling Azure Functions with pay-per-execution pricing
 - **Zero Downtime Deployments**: Blue-green deployment with staging slots
 - **Production Observability**: Application Insights with custom metrics and alerts
