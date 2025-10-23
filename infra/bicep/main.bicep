@@ -17,6 +17,24 @@ param location string = 'centralus'
 ])
 param environment string = 'dev'
 
+@description('Telegram Bot Token')
+@secure()
+param telegramBotToken string
+
+@description('Telegram Chat ID')
+param telegramChatId string
+
+@description('Congress.gov API Key')
+@secure()
+param congressApiKey string
+
+@description('Alpha Vantage API Key')
+@secure()
+param alphaVantageApiKey string
+
+@description('Document Intelligence Model ID')
+param documentIntelligenceModelId string = 'ptr-extractor-v1'
+
 // Create resource group
 resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: resourceGroupName
@@ -35,6 +53,11 @@ module resources 'resources.bicep' = {
   params: {
     location: location
     environment: environment
+    telegramBotToken: telegramBotToken
+    telegramChatId: telegramChatId
+    congressApiKey: congressApiKey
+    alphaVantageApiKey: alphaVantageApiKey
+    documentIntelligenceModelId: documentIntelligenceModelId
   }
 }
 

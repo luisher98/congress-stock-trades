@@ -75,7 +75,14 @@ jobs:
           subscriptionId: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
           region: centralus
           template: ./infra/bicep/main.bicep
-          parameters: environment=${{ github.event.inputs.environment || 'dev' }} location=centralus
+          parameters: >
+            environment=${{ github.event.inputs.environment || 'dev' }}
+            location=centralus
+            telegramBotToken=${{ secrets.TELEGRAM_BOT_TOKEN }}
+            telegramChatId=${{ secrets.TELEGRAM_CHAT_ID }}
+            congressApiKey=${{ secrets.CONGRESS_API_KEY }}
+            alphaVantageApiKey=${{ secrets.ALPHA_VANTAGE_API_KEY }}
+            documentIntelligenceModelId=ptr-extractor-v1
           deploymentName: congress-trades-${{ github.run_number }}
           failOnStdErr: false
 

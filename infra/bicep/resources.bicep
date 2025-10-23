@@ -5,6 +5,24 @@ param location string
 @description('Environment name')
 param environment string
 
+@description('Telegram Bot Token')
+@secure()
+param telegramBotToken string
+
+@description('Telegram Chat ID')
+param telegramChatId string
+
+@description('Congress.gov API Key')
+@secure()
+param congressApiKey string
+
+@description('Alpha Vantage API Key')
+@secure()
+param alphaVantageApiKey string
+
+@description('Document Intelligence Model ID')
+param documentIntelligenceModelId string = 'ptr-extractor-v1'
+
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var functionAppName = 'func-cst-${environment}-${take(uniqueSuffix, 8)}'
 // Storage account name must be 3-24 chars, lowercase and numbers only
@@ -257,6 +275,26 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'HouseGov__BaseUrl'
           value: 'https://disclosures-clerk.house.gov'
+        }
+        {
+          name: 'Telegram__BotToken'
+          value: telegramBotToken
+        }
+        {
+          name: 'Telegram__ChatId'
+          value: telegramChatId
+        }
+        {
+          name: 'CongressApi__ApiKey'
+          value: congressApiKey
+        }
+        {
+          name: 'AlphaVantage__ApiKey'
+          value: alphaVantageApiKey
+        }
+        {
+          name: 'DocumentIntelligence__ModelId'
+          value: documentIntelligenceModelId
         }
       ]
       netFrameworkVersion: 'v8.0'

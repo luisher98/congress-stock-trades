@@ -45,11 +45,11 @@ This directory contains Infrastructure as Code (IaC) templates for deploying the
 
 ## GitHub Actions Secrets
 
-Configure this secret in your GitHub repository:
+Configure these secrets in your GitHub repository (Settings → Secrets and variables → Actions):
 
-### Required Secret
+### Required Secrets
 
-**AZURE_CREDENTIALS** (contains subscription ID, no need for separate secret)
+1. **AZURE_CREDENTIALS** - Azure service principal credentials
 
 ```bash
 az ad sp create-for-rbac \
@@ -60,11 +60,26 @@ az ad sp create-for-rbac \
 ```
 
 Copy the entire JSON output to this secret. The JSON includes:
-
 - `clientId` - Service principal ID
 - `clientSecret` - Authentication secret
 - `subscriptionId` - Your Azure subscription ID (extracted automatically)
 - `tenantId` - Your Azure AD tenant ID
+
+2. **TELEGRAM_BOT_TOKEN** - Telegram bot authentication token
+   - Get from [@BotFather](https://t.me/botfather) on Telegram
+   - Format: `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`
+
+3. **TELEGRAM_CHAT_ID** - Your Telegram chat ID for notifications
+   - Get from [@userinfobot](https://t.me/userinfobot) on Telegram
+   - Format: `123456789`
+
+4. **CONGRESS_API_KEY** - Congress.gov API key
+   - Sign up at [api.congress.gov](https://api.congress.gov/sign-up/)
+   - Free tier: 5,000 requests/hour
+
+5. **ALPHA_VANTAGE_API_KEY** - Alpha Vantage stock data API key
+   - Sign up at [alphavantage.co](https://www.alphavantage.co/support/#api-key)
+   - Free tier: 25 requests/day
 
 ## Deployment via GitHub Actions
 
@@ -110,10 +125,28 @@ az account set --subscription "Your Subscription Name"
 ```bash
 az deployment sub create \
   --name congress-trades-$(date +%Y%m%d-%H%M%S) \
-  --location eastus \
+  --location centralus \
   --template-file infra/bicep/main.bicep \
-  --parameters environment=dev location=eastus
+  --parameters \
+    environment=dev \
+    location=centralus \
+    telegramBotToken="YOUR_TELEGRAM_BOT_TOKEN" \
+    telegramChatId="YOUR_TELEGRAM_CHAT_ID" \
+    congressApiKey="YOUR_CONGRESS_API_KEY" \
+    alphaVantageApiKey="YOUR_ALPHA_VANTAGE_API_KEY"
 ```
+
+Alternatively, use the parameters file:
+
+```bash
+az deployment sub create \
+  --name congress-trades-$(date +%Y%m%d-%H%M%S) \
+  --location centralus \
+  --template-file infra/bicep/main.bicep \
+  --parameters @infra/bicep/main.parameters.json
+```
+
+> **Note**: Update `main.parameters.json` with your actual values or Key Vault references before deploying.
 
 ### 3. Get Resource Names
 
