@@ -192,7 +192,7 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
         _logger.LogInformation("Retrieving assignments for member {MemberKey}", memberKey);
 
         var query = new QueryDefinition(
-            "SELECT * FROM c WHERE c.memberKey = @memberKey")
+            "SELECT * FROM c WHERE c.MemberKey = @memberKey")
             .WithParameter("@memberKey", memberKey);
 
         var results = new List<AssignmentDocument>();
