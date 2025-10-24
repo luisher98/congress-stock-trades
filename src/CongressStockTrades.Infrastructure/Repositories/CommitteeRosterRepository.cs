@@ -213,11 +213,11 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
         _logger.LogInformation("Searching for member by name: {LastName}, {FirstName}", lastName, firstName);
 
         // The DisplayName in the database is in format "FirstName LastName" (e.g., "Pete Sessions")
-        // Use case-insensitive comparison with StringEquals for proper case handling
+        // Note: Field name is case-sensitive - it's DisplayName with capital D
         var displayName = $"{firstName} {lastName}";
 
         var query = new QueryDefinition(
-            "SELECT * FROM c WHERE StringEquals(c.displayName, @displayName, true)")
+            "SELECT * FROM c WHERE c.DisplayName = @displayName")
             .WithParameter("@displayName", displayName);
 
         using var iterator = _membersContainer.GetItemQueryIterator<MemberDocument>(query);
@@ -233,7 +233,7 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
             }
             else
             {
-                _logger.LogWarning("No member found for name: {LastName}, {FirstName} (searched for displayName = '{DisplayName}')",
+                _logger.LogWarning("No member found for name: {LastName}, {FirstName} (searched for DisplayName = '{DisplayName}')",
                     lastName, firstName, displayName);
             }
 
