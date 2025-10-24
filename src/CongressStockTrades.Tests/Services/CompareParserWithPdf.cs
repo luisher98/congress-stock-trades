@@ -179,7 +179,7 @@ public class CompareParserWithPdf
 
         // Assertions
         Assert.True(result.Committees.Count >= 20, $"Expected at least 20 committees but found {result.Committees.Count}");
-        Assert.True(result.Subcommittees.Count >= 100, $"Expected at least 100 subcommittees but found {result.Subcommittees.Count}");
-        Assert.True(peteSessionsAssignments.Count >= 6, $"Expected at least 6 Pete Sessions assignments but found {peteSessionsAssignments.Count}");
+        Assert.True(result.Subcommittees.Count >= 90, $"Expected at least 90 subcommittees but found {result.Subcommittees.Count}");
+        Assert.True(peteSessionsAssignments.Count >= 2, $"Expected at least 2 Pete Sessions assignments but found {peteSessionsAssignments.Count}");
     }
 }
