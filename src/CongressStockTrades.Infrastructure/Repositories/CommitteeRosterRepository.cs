@@ -213,11 +213,12 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
         _logger.LogInformation("Searching for member by name: {LastName}, {FirstName}", lastName, firstName);
 
         // The DisplayName in the database is in format "FirstName LastName" (e.g., "Pete Sessions")
+        // Use case-insensitive comparison with StringEquals for proper case handling
         var displayName = $"{firstName} {lastName}";
 
         var query = new QueryDefinition(
-            "SELECT * FROM c WHERE LOWER(c.displayName) = @displayName")
-            .WithParameter("@displayName", displayName.ToLowerInvariant());
+            "SELECT * FROM c WHERE StringEquals(c.displayName, @displayName, true)")
+            .WithParameter("@displayName", displayName);
 
         using var iterator = _membersContainer.GetItemQueryIterator<MemberDocument>(query);
 
