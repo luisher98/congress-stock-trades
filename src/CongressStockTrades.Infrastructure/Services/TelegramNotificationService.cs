@@ -164,28 +164,43 @@ public class TelegramNotificationService
         {
             sb.AppendLine();
 
-            // Group assignments by main committee
-            var committeeGroups = assignments
-                .Where(a => !string.IsNullOrEmpty(a.CommitteeAssignmentKey))
-                .GroupBy(a => a.CommitteeAssignmentKey)
-                .OrderBy(g => g.Key)
+            // Get all unique committee keys from both main committees and subcommittees
+            var allCommitteeKeys = assignments
+                .Where(a => !string.IsNullOrEmpty(a.CommitteeAssignmentKey) || !string.IsNullOrEmpty(a.SubcommitteeAssignmentKey))
+                .SelectMany(a => new[] { a.CommitteeAssignmentKey, a.SubcommitteeAssignmentKey }
+                    .Where(key => !string.IsNullOrEmpty(key)))
+                .Select(key => key!.Contains("::") ? key.Split("::")[0] : key)
+                .Distinct()
+                .OrderBy(key => key)
                 .ToList();
 
-            if (committeeGroups.Any())
+            if (allCommitteeKeys.Any())
             {
                 sb.AppendLine("📋 *Committees:*");
                 
-                foreach (var committeeGroup in committeeGroups)
+                foreach (var committeeKey in allCommitteeKeys)
                 {
-                    var mainCommittee = committeeGroup.First();
-                    var role = mainCommittee.Role != "Member" ? $" \\({mainCommittee.Role}\\)" : "";
-                    var committeeName = ConvertCommitteeKeyToDisplayName(mainCommittee.CommitteeAssignmentKey ?? "");
-                    sb.AppendLine($"• {EscapeMarkdown(committeeName)}{role}");
+                    // Find main committee assignment
+                    var mainCommitteeAssignment = assignments
+                        .FirstOrDefault(a => a.CommitteeAssignmentKey == committeeKey);
 
-                    // Find subcommittees for this main committee
+                    if (mainCommitteeAssignment != null)
+                    {
+                        var role = mainCommitteeAssignment.Role != "Member" ? $" \\({mainCommitteeAssignment.Role}\\)" : "";
+                        var committeeName = ConvertCommitteeKeyToDisplayName(mainCommitteeAssignment.CommitteeAssignmentKey ?? "");
+                        sb.AppendLine($"• {EscapeMarkdown(committeeName)}{role}");
+                    }
+                    else
+                    {
+                        // If no main committee assignment, show the committee name from subcommittee
+                        var committeeName = ConvertCommitteeKeyToDisplayName(committeeKey);
+                        sb.AppendLine($"• {EscapeMarkdown(committeeName)}");
+                    }
+
+                    // Find all subcommittees for this main committee
                     var subcommittees = assignments
                         .Where(a => !string.IsNullOrEmpty(a.SubcommitteeAssignmentKey) && 
-                                   a.SubcommitteeAssignmentKey.StartsWith(mainCommittee.CommitteeAssignmentKey + "::"))
+                                   a.SubcommitteeAssignmentKey.StartsWith(committeeKey + "::"))
                         .OrderBy(a => a.PositionOrder)
                         .ToList();
 
