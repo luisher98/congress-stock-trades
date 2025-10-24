@@ -88,13 +88,15 @@ var host = new HostBuilder()
         services.AddSingleton<IDataValidator, DataValidator>();
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
         services.AddSingleton<INotificationService, SignalRNotificationService>();
-        services.AddSingleton<TelegramNotificationService>();
 
         // Committee Roster services
         services.AddSingleton<IBlobStorageService, BlobStorageService>();
         services.AddSingleton<ICommitteeRosterParser, CommitteeRosterParser>();
         services.AddSingleton<ICommitteeRosterRepository, CommitteeRosterRepository>();
         services.AddSingleton<ICommitteeRosterQAService, CommitteeRosterQAService>();
+
+        // Telegram service (must be after CommitteeRosterRepository for DI)
+        services.AddSingleton<TelegramNotificationService>();
 
         // Committee Roster settings
         services.Configure<CommitteeRosterSettings>(context.Configuration.GetSection("CommitteeRosters"));

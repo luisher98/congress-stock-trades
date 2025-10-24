@@ -23,7 +23,7 @@ public class TelegramNotificationService
     public TelegramNotificationService(
         IConfiguration configuration,
         ILogger<TelegramNotificationService> logger,
-        ICommitteeRosterRepository? committeeRosterRepository = null)
+        ICommitteeRosterRepository committeeRosterRepository)
     {
         _httpClient = new HttpClient();
         _logger = logger;
@@ -68,26 +68,39 @@ public class TelegramNotificationService
             {
                 try
                 {
+                    _logger.LogInformation("Attempting to find committee assignments for {Name}", transaction.Filing_Information.Name);
                     var (lastName, firstName) = ExtractNameParts(transaction.Filing_Information.Name);
+                    _logger.LogInformation("Extracted name parts: LastName='{LastName}', FirstName='{FirstName}'", lastName, firstName);
+
                     if (!string.IsNullOrEmpty(lastName) && !string.IsNullOrEmpty(firstName))
                     {
                         var member = await _committeeRosterRepository.FindMemberByNameAsync(lastName, firstName);
                         if (member != null)
                         {
+                            _logger.LogInformation("Found member in database: {DisplayName} ({MemberKey})", member.DisplayName, member.MemberKey);
                             assignments = await _committeeRosterRepository.GetMemberAssignmentsAsync(member.MemberKey);
                             _logger.LogInformation("Found {Count} committee assignments for {Name}", assignments.Count, member.DisplayName);
                         }
                         else
                         {
-                            _logger.LogWarning("Member not found in committee roster database: {Name}", transaction.Filing_Information.Name);
+                            _logger.LogWarning("Member not found in committee roster database: {Name} (searched for '{LastName}, {FirstName}')",
+                                transaction.Filing_Information.Name, lastName, firstName);
                         }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Could not extract valid name parts from: {Name}", transaction.Filing_Information.Name);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to retrieve committee assignments for {Name}", transaction.Filing_Information.Name);
+                    _logger.LogError(ex, "Failed to retrieve committee assignments for {Name}", transaction.Filing_Information.Name);
                     // Fall back to old committee data if available
                 }
+            }
+            else
+            {
+                _logger.LogInformation("CommitteeRosterRepository is null, skipping committee lookup");
             }
 
             var message = FormatTransactionMessage(transaction, assignments);
