@@ -164,22 +164,38 @@ public class TelegramNotificationService
         {
             sb.AppendLine();
 
-            // Group by committee (not subcommittee) to show main committee assignments
+            // Show main committee assignments
             var committeeAssignments = assignments
                 .Where(a => !string.IsNullOrEmpty(a.CommitteeAssignmentKey))
-                .GroupBy(a => a.CommitteeAssignmentKey)
-                .Select(g => g.OrderBy(a => a.PositionOrder).First()) // Take the one with lowest position order
                 .OrderBy(a => a.PositionOrder)
                 .ToList();
 
             if (committeeAssignments.Any())
             {
-                sb.AppendLine("📋 *Committee Assignments:*");
+                sb.AppendLine("📋 *Committees:*");
                 foreach (var assignment in committeeAssignments)
                 {
                     var role = assignment.Role != "Member" ? $" \\({assignment.Role}\\)" : "";
                     var committeeName = ConvertCommitteeKeyToDisplayName(assignment.CommitteeAssignmentKey ?? "");
                     sb.AppendLine($"  • {EscapeMarkdown(committeeName)}{role}");
+                }
+            }
+
+            // Show subcommittee assignments
+            var subcommitteeAssignments = assignments
+                .Where(a => !string.IsNullOrEmpty(a.SubcommitteeAssignmentKey))
+                .OrderBy(a => a.PositionOrder)
+                .ToList();
+
+            if (subcommitteeAssignments.Any())
+            {
+                sb.AppendLine();
+                sb.AppendLine("📋 *Subcommittees:*");
+                foreach (var assignment in subcommitteeAssignments)
+                {
+                    var role = assignment.Role != "Member" ? $" \\({assignment.Role}\\)" : "";
+                    var subcommitteeName = ConvertCommitteeKeyToDisplayName(assignment.SubcommitteeAssignmentKey ?? "");
+                    sb.AppendLine($"  • {EscapeMarkdown(subcommitteeName)}{role}");
                 }
             }
         }

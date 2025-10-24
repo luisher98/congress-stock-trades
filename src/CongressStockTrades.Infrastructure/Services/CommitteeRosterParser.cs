@@ -21,8 +21,9 @@ public class CommitteeRosterParser : ICommitteeRosterParser
     // Must be at least 3 chars and not match common non-committee phrases
     private static readonly Regex CommitteeHeaderPattern = new(@"^([A-Z][A-Z\s,&'-]+)$", RegexOptions.Compiled);
     private static readonly Regex SubcommitteeHeaderPattern = new(@"^SUBCOMMITTEES?\s+OF\s+THE\s+COMMITTEE\s+ON\s+(.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex MemberLinePattern = new(@"^\s*(\d+)\.\s+(.+?)(?:,\s+of\s+([A-Z][a-z\s]+))?(?:,\s+(.+))?$", RegexOptions.Compiled);
-    private static readonly Regex RolePattern = new(@"\b(Chair|Ranking Member|Vice Chair|Ex Officio)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex MemberLinePattern = new(@"^\s*(\d+)\.\s*(.+?)(?:,\s*of\s+([A-Z][a-z\s]+))?(?:,\s*(.+))?$", RegexOptions.Compiled);
+    private static readonly Regex SubcommitteeMemberLinePattern = new(@"^([A-Z][a-zA-Z\.\s]+(?:,\s*(?:Jr\.|Sr\.|III|IV|V))?)\s*,\s*([A-Z]{2})(?:\s*,\s*(.+))?", RegexOptions.Compiled);
+    private static readonly Regex RolePattern = new(@"\b(Chair|Ranking Member|Vice Chair|Ex Officio|Chairman)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // List of known standing committee names (used to detect when we've left a subcommittee section)
     private static readonly HashSet<string> KnownStandingCommittees = new(StringComparer.OrdinalIgnoreCase)
@@ -339,11 +340,14 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                     continue;
                 }
 
+                // Fix concatenated names (e.g., "PeteSessions,TX" -> "Pete Sessions, TX")
+                var fixedLine = FixConcatenatedNames(trimmed);
+
                 // Parse member line - check if it contains two members (majority and minority on same line)
                 // Pattern: "14. Carlos A. Gimenez, FL 14. Marilyn Strickland, WA"
                 // Always check for dual members first by looking for multiple position numbers
-                var splitPattern = new Regex(@"(\d+\.\s+.+?)(?=\s+\d+\.|$)");
-                var splits = splitPattern.Matches(trimmed);
+                var splitPattern = new Regex(@"(\d+\.\s*.+?)(?=\s*\d+\.|$)");
+                var splits = splitPattern.Matches(fixedLine);
 
                 List<string> memberLines = new();
                 if (splits.Count > 1)
@@ -358,7 +362,7 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                 else
                 {
                     // Single member or no match - process as-is
-                    memberLines.Add(trimmed);
+                    memberLines.Add(fixedLine);
                 }
 
                 // Process each member line (could be 1 or 2 members)
@@ -366,6 +370,74 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                 foreach (var memberLine in memberLines)
                 {
                     var memberMatch = MemberLinePattern.Match(memberLine);
+
+                    // If regular pattern doesn't match and we're in a subcommittee, try subcommittee pattern
+                    if (!memberMatch.Success && currentSubcommitteeKey != null)
+                    {
+                        // Try to parse as subcommittee member (no position number)
+                        // Split by spaces to find two member names on the same line
+                        var subcommitteeMembers = ParseSubcommitteeMembers(memberLine);
+
+                        if (subcommitteeMembers.Count > 0)
+                        {
+                            bool firstMember = true;
+                            foreach (var subMember in subcommitteeMembers)
+                            {
+                                var subMemberKey = NormalizeMemberKey(subMember.Name, subMember.State, null);
+
+                                // Add member if not already exists
+                                if (!result.Members.Any(m => m.MemberKey == subMemberKey))
+                                {
+                                    var subMemberDoc = new MemberDocument
+                                    {
+                                        Id = subMemberKey,
+                                        MemberKey = subMemberKey,
+                                        DisplayName = subMember.Name,
+                                        State = subMember.State ?? "Unknown",
+                                        District = null,
+                                        Provenance = new CommitteeProvenance
+                                        {
+                                            SourceDate = sourceDate,
+                                            PageNumber = pageNumber,
+                                            BlobUri = blobUri,
+                                            PdfHash = pdfHash
+                                        }
+                                    };
+                                    result.Members.Add(subMemberDoc);
+                                }
+
+                                // Add assignment
+                                var subAssignmentKey = $"{subMemberKey}::{currentSubcommitteeKey}::{sourceDate}";
+
+                                var subAssignment = new AssignmentDocument
+                                {
+                                    Id = subAssignmentKey,
+                                    CommitteeKey = currentCommitteeKey!,
+                                    AssignmentKey = subAssignmentKey,
+                                    MemberKey = subMemberKey,
+                                    MemberDisplayName = subMember.Name,
+                                    CommitteeAssignmentKey = null, // Subcommittee assignment
+                                    SubcommitteeAssignmentKey = currentSubcommitteeKey,
+                                    Role = subMember.Role ?? "Member",
+                                    Group = firstMember ? "Majority" : "Minority", // First is majority, second is minority
+                                    PositionOrder = 0, // No position for subcommittee members
+                                    Provenance = new AssignmentProvenance
+                                    {
+                                        SourceDate = sourceDate,
+                                        PageNumber = pageNumber,
+                                        BlobUri = blobUri,
+                                        PdfHash = pdfHash,
+                                        RawLine = memberLine
+                                    }
+                                };
+
+                                result.Assignments.Add(subAssignment);
+                                firstMember = false;
+                            }
+                            continue; // Move to next line
+                        }
+                    }
+
                     if (!memberMatch.Success)
                         continue;
 
@@ -556,5 +628,53 @@ public class CommitteeRosterParser : ICommitteeRosterParser
         }
 
         return key.ToString();
+    }
+
+    private string FixConcatenatedNames(string line)
+    {
+        // Fix patterns like "PeteSessions,TX" -> "Pete Sessions, TX"
+        // This regex finds lowercase followed by uppercase within a word
+        var pattern = @"([a-z])([A-Z])";
+        var fixedLine = Regex.Replace(line, pattern, "$1 $2");
+
+        // Also ensure there's a space after commas if missing
+        fixedLine = Regex.Replace(fixedLine, @",([A-Z])", ", $1");
+
+        // Fix patterns where there's no space after a period and number
+        fixedLine = Regex.Replace(fixedLine, @"(\d+\.)([A-Z])", "$1 $2");
+
+        return fixedLine;
+    }
+
+    private List<(string Name, string? State, string? Role)> ParseSubcommitteeMembers(string line)
+    {
+        var members = new List<(string Name, string? State, string? Role)>();
+
+        // Pattern to match member names with states
+        // E.g., "Pete Sessions, TX Juan Vargas, CA" or "Pete Sessions, TX, Chairman Kweisi Mfume, MD"
+        var pattern = @"([A-Z][a-zA-Z\.\s]+?)(?:,\s*(?:Jr\.|Sr\.|III|IV|V))?\s*,\s*([A-Z]{2})(?:\s*,\s*([^,]+?))?(?:\s+|$)";
+        var matches = Regex.Matches(line, pattern);
+
+        foreach (Match match in matches)
+        {
+            var name = match.Groups[1].Value.Trim();
+            var state = match.Groups[2].Value.Trim();
+            var roleText = match.Groups[3].Value?.Trim();
+
+            // Extract role if present
+            string? role = null;
+            if (!string.IsNullOrEmpty(roleText))
+            {
+                var roleMatch = RolePattern.Match(roleText);
+                if (roleMatch.Success)
+                {
+                    role = roleMatch.Groups[1].Value;
+                }
+            }
+
+            members.Add((name, state, role));
+        }
+
+        return members;
     }
 }

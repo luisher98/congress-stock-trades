@@ -1,0 +1,89 @@
+{
+  "Statistics": {
+    "Committees": 28,
+    "Subcommittees": 113,
+    "Members": 893,
+    "Assignments": 2487
+  },
+  "PeteSessions": [
+    {
+      "CommitteeKey": "financial-services",
+      "SubcommitteeAssignmentKey": null,
+      "Role": "Member",
+      "Group": "Majority",
+      "Page": 23,
+      "Line": "3. Pete Sessions, TX"
+    },
+    {
+      "CommitteeKey": "financial-services",
+      "SubcommitteeAssignmentKey": "financial-services::capital-markets",
+      "Role": "Member",
+      "Group": "Majority",
+      "Page": 24,
+      "Line": "Pete Sessions, TX Juan Vargas, CA"
+    },
+    {
+      "CommitteeKey": "financial-services",
+      "SubcommitteeAssignmentKey": "financial-services::national-security-illicit-finance-and-international-financial-institutions",
+      "Role": "Member",
+      "Group": "Majority",
+      "Page": 25,
+      "Line": "Pete Sessions, TX Bill Foster, IL"
+    },
+    {
+      "CommitteeKey": "natural-resources",
+      "SubcommitteeAssignmentKey": "natural-resources::oversight-and-government-reform",
+      "Role": "Member",
+      "Group": "Majority",
+      "Page": 39,
+      "Line": "10. Pete Sessions, TX"
+    },
+    {
+      "CommitteeKey": "oversight-and",
+      "SubcommitteeAssignmentKey": "oversight-and::federal-law-enforcement",
+      "Role": "Chairman",
+      "Group": "Majority",
+      "Page": 40,
+      "Line": "Pete Sessions, TX, Chairman Kweisi Mfume, MD"
+    },
+    {
+      "CommitteeKey": "oversight-and",
+      "SubcommitteeAssignmentKey": "oversight-and::health-care-and-financial-services",
+      "Role": "Member",
+      "Group": "Majority",
+      "Page": 41,
+      "Line": "Pete Sessions, TX Wesley Bell, MO"
+    }
+  ],
+  "CommitteeList": [
+    "AGRICULTURE",
+    "APPROPRIATIONS",
+    "ARMED SERVICES",
+    "BUDGET",
+    "EDUCATION AND WORKFORCE",
+    "ENERGY AND COMMERCE",
+    "ETHICS",
+    "FINANCIAL SERVICES",
+    "FOREIGN AFFAIRS",
+    "HOMELAND SECURITY",
+    "INTERIOR, ENVIRONMENT, AND RELATED AGENCIES",
+    "JUDICIARY",
+    "LABOR, HEALTH AND HUMAN SERVICES, EDUCATION, AND RELATED AGENCIES",
+    "LEGISLATIVE BRANCH",
+    "MILITARY CONSTRUCTION, VETERANS AFFAIRS, AND RELATED AGENCIES",
+    "NATIONAL SECURITY, DEPARTMENT OF STATE, AND RELATED PROGRAMS",
+    "NATURAL RESOURCES",
+    "OVERSIGHT AND",
+    "RULES",
+    "SCIENCE, SPACE, AND",
+    "SCIENCE, SPACE, AND TECHNOLOGY",
+    "SMALL BUSINESS",
+    "THE JUDICIARY",
+    "TRANSPORTATION AND",
+    "TRANSPORTATION AND INFRASTRUCTURE",
+    "TRANSPORTATION, HOUSING AND URBAN DEVELOPMENT, AND RELATED AGENCIES",
+    "VETERANS\u0027 AFFAIRS",
+    "WAYS AND MEANS"
+  ],
+  "Warnings": []
+}
