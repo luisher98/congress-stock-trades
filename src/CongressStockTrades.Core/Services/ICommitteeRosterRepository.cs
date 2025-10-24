@@ -73,4 +73,9 @@ public interface ICommitteeRosterRepository
     /// Gets all committee/subcommittee assignments for a specific member.
     /// </summary>
     Task<List<AssignmentDocument>> GetMemberAssignmentsAsync(string memberKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Searches for a member by last name and first name.
+    /// </summary>
+    Task<MemberDocument?> FindMemberByNameAsync(string lastName, string firstName, CancellationToken cancellationToken = default);
 }

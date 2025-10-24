@@ -207,4 +207,38 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
         _logger.LogInformation("Found {Count} assignments for member {MemberKey}", results.Count, memberKey);
         return results;
     }
+
+    public async Task<MemberDocument?> FindMemberByNameAsync(string lastName, string firstName, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Searching for member by name: {LastName}, {FirstName}", lastName, firstName);
+
+        // The DisplayName in the database is in format "LastName, FirstName"
+        var displayName = $"{lastName}, {firstName}";
+
+        var query = new QueryDefinition(
+            "SELECT * FROM c WHERE CONTAINS(LOWER(c.displayName), @searchName)")
+            .WithParameter("@searchName", displayName.ToLowerInvariant());
+
+        using var iterator = _membersContainer.GetItemQueryIterator<MemberDocument>(query);
+
+        if (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(cancellationToken);
+            var member = response.FirstOrDefault();
+
+            if (member != null)
+            {
+                _logger.LogInformation("Found member: {DisplayName} ({MemberKey})", member.DisplayName, member.MemberKey);
+            }
+            else
+            {
+                _logger.LogWarning("No member found for name: {LastName}, {FirstName}", lastName, firstName);
+            }
+
+            return member;
+        }
+
+        _logger.LogWarning("No member found for name: {LastName}, {FirstName}", lastName, firstName);
+        return null;
+    }
 }

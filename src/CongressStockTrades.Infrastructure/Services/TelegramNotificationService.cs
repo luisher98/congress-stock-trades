@@ -68,11 +68,19 @@ public class TelegramNotificationService
             {
                 try
                 {
-                    var memberKey = ConvertToMemberKey(transaction.Filing_Information.Name, transaction.Filing_Information.State_District);
-                    if (!string.IsNullOrEmpty(memberKey))
+                    var (lastName, firstName) = ExtractNameParts(transaction.Filing_Information.Name);
+                    if (!string.IsNullOrEmpty(lastName) && !string.IsNullOrEmpty(firstName))
                     {
-                        assignments = await _committeeRosterRepository.GetMemberAssignmentsAsync(memberKey);
-                        _logger.LogInformation("Found {Count} committee assignments for {MemberKey}", assignments.Count, memberKey);
+                        var member = await _committeeRosterRepository.FindMemberByNameAsync(lastName, firstName);
+                        if (member != null)
+                        {
+                            assignments = await _committeeRosterRepository.GetMemberAssignmentsAsync(member.MemberKey);
+                            _logger.LogInformation("Found {Count} committee assignments for {Name}", assignments.Count, member.DisplayName);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Member not found in committee roster database: {Name}", transaction.Filing_Information.Name);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -404,33 +412,47 @@ public class TelegramNotificationService
     }
 
     /// <summary>
-    /// Converts member name and state-district to a memberKey matching the roster database format.
-    /// Example: "Doe, John" + "CA12" -> "doe-john-ca12"
+    /// Extracts last name and first name from various formats.
+    /// Handles: "Hon. Pete Sessions", "Sessions, Pete", "Pete Sessions"
     /// </summary>
-    private string? ConvertToMemberKey(string name, string stateDistrict)
+    private (string lastName, string firstName) ExtractNameParts(string fullName)
     {
-        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(stateDistrict))
-            return null;
+        if (string.IsNullOrEmpty(fullName))
+            return (string.Empty, string.Empty);
 
         try
         {
-            // Normalize name: "Doe, John" -> "doe-john"
-            var normalized = name
-                .ToLowerInvariant()
-                .Replace(", ", "-")
-                .Replace(" ", "-")
-                .Replace("'", "")
-                .Replace(".", "");
+            // Remove honorifics
+            var cleaned = fullName
+                .Replace("Hon. ", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("Rep. ", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("Sen. ", "", StringComparison.OrdinalIgnoreCase)
+                .Trim();
 
-            // Add state-district: "ca12"
-            var memberKey = $"{normalized}-{stateDistrict.ToLowerInvariant()}";
+            // Check if name is in "LastName, FirstName" format
+            if (cleaned.Contains(","))
+            {
+                var parts = cleaned.Split(',');
+                var lastName = parts[0].Trim();
+                var firstName = parts.Length > 1 ? parts[1].Trim().Split(' ')[0] : "";
+                return (lastName, firstName);
+            }
 
-            return memberKey;
+            // Otherwise assume "FirstName LastName" format
+            var nameParts = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (nameParts.Length >= 2)
+            {
+                var firstName = nameParts[0];
+                var lastName = nameParts[nameParts.Length - 1];
+                return (lastName, firstName);
+            }
+
+            return (string.Empty, string.Empty);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to convert name {Name} and district {District} to memberKey", name, stateDistrict);
-            return null;
+            _logger.LogWarning(ex, "Failed to extract name parts from {Name}", fullName);
+            return (string.Empty, string.Empty);
         }
     }
 
