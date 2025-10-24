@@ -212,12 +212,12 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
     {
         _logger.LogInformation("Searching for member by name: {LastName}, {FirstName}", lastName, firstName);
 
-        // The DisplayName in the database is in format "LastName, FirstName"
-        var displayName = $"{lastName}, {firstName}";
+        // The DisplayName in the database is in format "FirstName LastName" (e.g., "Pete Sessions")
+        var displayName = $"{firstName} {lastName}";
 
         var query = new QueryDefinition(
-            "SELECT * FROM c WHERE CONTAINS(LOWER(c.displayName), @searchName)")
-            .WithParameter("@searchName", displayName.ToLowerInvariant());
+            "SELECT * FROM c WHERE LOWER(c.displayName) = @displayName")
+            .WithParameter("@displayName", displayName.ToLowerInvariant());
 
         using var iterator = _membersContainer.GetItemQueryIterator<MemberDocument>(query);
 
@@ -232,7 +232,8 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
             }
             else
             {
-                _logger.LogWarning("No member found for name: {LastName}, {FirstName}", lastName, firstName);
+                _logger.LogWarning("No member found for name: {LastName}, {FirstName} (searched for displayName = '{DisplayName}')",
+                    lastName, firstName, displayName);
             }
 
             return member;
