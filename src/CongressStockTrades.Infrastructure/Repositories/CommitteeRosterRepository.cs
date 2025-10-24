@@ -212,35 +212,42 @@ public class CommitteeRosterRepository : ICommitteeRosterRepository
     {
         _logger.LogInformation("Searching for member by name: {LastName}, {FirstName}", lastName, firstName);
 
-        // The DisplayName in the database is in format "FirstName LastName" (e.g., "Pete Sessions")
-        // Note: Field name is case-sensitive - it's DisplayName with capital D
-        var displayName = $"{firstName} {lastName}";
-
-        var query = new QueryDefinition(
-            "SELECT * FROM c WHERE c.DisplayName = @displayName")
-            .WithParameter("@displayName", displayName);
-
-        using var iterator = _membersContainer.GetItemQueryIterator<MemberDocument>(query);
-
-        if (iterator.HasMoreResults)
+        // The DisplayName in the database is in format "FirstName LastName, State" (e.g., "Pete Sessions, TX")
+        // Try multiple search patterns to handle different name formats
+        var searchPatterns = new[]
         {
-            var response = await iterator.ReadNextAsync(cancellationToken);
-            var member = response.FirstOrDefault();
+            $"{firstName} {lastName}", // "Pete Sessions"
+            $"{firstName} {lastName},", // "Pete Sessions," (with comma)
+            $"{lastName}, {firstName}" // "Sessions, Pete" (lastname first format)
+        };
 
-            if (member != null)
-            {
-                _logger.LogInformation("Found member: {DisplayName} ({MemberKey})", member.DisplayName, member.MemberKey);
-            }
-            else
-            {
-                _logger.LogWarning("No member found for name: {LastName}, {FirstName} (searched for DisplayName = '{DisplayName}')",
-                    lastName, firstName, displayName);
-            }
+        foreach (var pattern in searchPatterns)
+        {
+            _logger.LogDebug("Trying search pattern: '{Pattern}'", pattern);
+            
+            // Use CONTAINS to match partial names since DisplayName includes state
+            var query = new QueryDefinition(
+                "SELECT * FROM c WHERE CONTAINS(c.DisplayName, @pattern)")
+                .WithParameter("@pattern", pattern);
 
-            return member;
+            using var iterator = _membersContainer.GetItemQueryIterator<MemberDocument>(query);
+
+            if (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync(cancellationToken);
+                var member = response.FirstOrDefault();
+
+                if (member != null)
+                {
+                    _logger.LogInformation("Found member: {DisplayName} ({MemberKey}) using pattern '{Pattern}'", 
+                        member.DisplayName, member.MemberKey, pattern);
+                    return member;
+                }
+            }
         }
 
-        _logger.LogWarning("No member found for name: {LastName}, {FirstName}", lastName, firstName);
+        _logger.LogWarning("No member found for name: {LastName}, {FirstName} (tried {Count} search patterns)", 
+            lastName, firstName, searchPatterns.Length);
         return null;
     }
 }

@@ -50,6 +50,23 @@ public class CommitteeRosterParser : ICommitteeRosterParser
         "WAYS AND MEANS"
     };
 
+    // Known Select Committees
+    private static readonly HashSet<string> KnownSelectCommittees = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SELECT COMMITTEE ON THE CHINESE COMMUNIST PARTY",
+        "SELECT COMMITTEE ON THE STRATEGIC COMPETITION BETWEEN THE UNITED STATES AND THE CHINESE COMMUNIST PARTY",
+        "SELECT COMMITTEE ON THE MODERNIZATION OF CONGRESS"
+    };
+
+    // Known Joint Committees
+    private static readonly HashSet<string> KnownJointCommittees = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "JOINT COMMITTEE ON TAXATION",
+        "JOINT COMMITTEE ON THE LIBRARY",
+        "JOINT ECONOMIC COMMITTEE",
+        "JOINT COMMITTEE ON PRINTING"
+    };
+
     public CommitteeRosterParser(ILogger<CommitteeRosterParser> logger)
     {
         _logger = logger;
@@ -177,6 +194,27 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                 {
                     // Extract parent committee name from the header
                     var parentCommitteeName = subcommitteeMatch.Groups[1].Value.Trim();
+
+                    // Fix truncated committee names by mapping them to their full names
+                    var committeeNameMappings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        { "OVERSIGHT AND", "OVERSIGHT AND ACCOUNTABILITY" },
+                        { "SCIENCE, SPACE, AND", "SCIENCE, SPACE, AND TECHNOLOGY" },
+                        { "EDUCATION AND THE", "EDUCATION AND THE WORKFORCE" },
+                        { "TRANSPORTATION AND", "TRANSPORTATION AND INFRASTRUCTURE" }
+                    };
+
+                    // Check if we need to fix a truncated name
+                    foreach (var mapping in committeeNameMappings)
+                    {
+                        if (parentCommitteeName.Equals(mapping.Key, StringComparison.OrdinalIgnoreCase))
+                        {
+                            parentCommitteeName = mapping.Value;
+                            _logger.LogDebug("Fixed truncated committee name: {OldName} -> {NewName}", mapping.Key, mapping.Value);
+                            break;
+                        }
+                    }
+
                     var parentCommitteeKey = NormalizeName(parentCommitteeName);
 
                     // Ensure the parent committee exists in our collection
@@ -261,11 +299,17 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                         continue;
                     }
 
-                    // Check if this is a known standing committee (which means we've left the subcommittee section)
+                    // Check if this is a known standing, select, or joint committee
                     bool isKnownStandingCommittee = KnownStandingCommittees.Contains(potentialName);
+                    bool isSelectCommittee = potentialName.Contains("SELECT COMMITTEE", StringComparison.OrdinalIgnoreCase) ||
+                                            KnownSelectCommittees.Any(sc => potentialName.Contains(sc, StringComparison.OrdinalIgnoreCase));
+                    bool isJointCommittee = potentialName.Contains("JOINT COMMITTEE", StringComparison.OrdinalIgnoreCase) ||
+                                           KnownJointCommittees.Any(jc => potentialName.Contains(jc, StringComparison.OrdinalIgnoreCase));
+
+                    bool isMainCommittee = isKnownStandingCommittee || isSelectCommittee || isJointCommittee;
 
                     // Determine if this is a subcommittee or main committee
-                    if (inSubcommitteeSection && currentCommitteeKey != null && !isKnownStandingCommittee)
+                    if (inSubcommitteeSection && currentCommitteeKey != null && !isMainCommittee)
                     {
                         // This is a subcommittee name
                         currentSubcommitteeName = potentialName;
@@ -304,13 +348,20 @@ public class CommitteeRosterParser : ICommitteeRosterParser
                         // Add committee (avoid duplicates)
                         if (!result.Committees.Any(c => c.CommitteeKey == currentCommitteeKey))
                         {
+                            // Determine committee type
+                            string committeeType = "Standing"; // Default
+                            if (isSelectCommittee)
+                                committeeType = "Select";
+                            else if (isJointCommittee)
+                                committeeType = "Joint";
+
                             var committee = new CommitteeDocument
                             {
                                 Id = currentCommitteeKey,
                                 CommitteeKey = currentCommitteeKey,
                                 Name = currentCommitteeName,
                                 Chamber = "House",
-                                Type = "Standing", // Default; can be enhanced
+                                Type = committeeType,
                                 Provenance = new CommitteeProvenance
                                 {
                                     SourceDate = sourceDate,
